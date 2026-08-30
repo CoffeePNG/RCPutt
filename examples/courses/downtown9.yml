@@ -1,0 +1,24 @@
+# Example course. Drop into plugins/RCPuttPutt/courses/ and adjust the coordinates to your build.
+# Normally you build in-world with /puttputt admin and let the plugin write this file.
+id: downtown9
+display: "<gold>Downtown 9</gold>"
+world: minigolf
+holes:
+  - number: 1
+    par: 3
+    tee: {x: 100.5, y: 65.0, z: 200.5}
+    cup: {x: 118.5, y: 65.0, z: 200.5}
+    bounds:
+      min: [95, 64, 195]
+      max: [125, 68, 210]
+  - number: 2
+    par: 4
+    tee: {x: 130.5, y: 65.0, z: 200.5}
+    cup: {x: 130.5, y: 65.0, z: 178.5}
+    bounds:
+      min: [124, 64, 172]
+      max: [140, 68, 208]
+    # Per-hole overrides beat the global material_map in config.yml.
+    surface_overrides:
+      material_map:
+        ORANGE_CONCRETE: BOOSTER_EAST
