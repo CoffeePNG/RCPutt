@@ -38,9 +38,9 @@ class SqliteScoreDaoTest {
     private void record(UUID player, String name, String course, int strokes, int diff, long at)
             throws StorageException {
         UUID roundId = UUID.randomUUID();
-        dao.recordRoundStart(roundId, course, at);
+        dao.recordRoundStart(roundId, course, "[]", at);
         dao.recordScore(roundId, player, name, course, strokes, diff, at);
-        dao.recordRoundEnd(roundId, at);
+        dao.recordRoundEnd(roundId, at, "COMPLETE");
     }
 
     /**

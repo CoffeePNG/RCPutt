@@ -49,10 +49,18 @@ public final class SqliteScoreDao implements ScoreDao {
                 statement.executeUpdate("PRAGMA foreign_keys = ON");
                 statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS pp_rounds (
-                          round_id   TEXT PRIMARY KEY,
-                          course_id  TEXT NOT NULL,
-                          started_at INTEGER NOT NULL,
-                          ended_at   INTEGER
+                          round_id       TEXT PRIMARY KEY,
+                          course_id      TEXT NOT NULL,
+                          party_snapshot TEXT NOT NULL DEFAULT '[]',
+                          state          TEXT NOT NULL DEFAULT 'IN_PROGRESS',
+                          started_at     INTEGER NOT NULL,
+                          ended_at       INTEGER
+                        )""");
+                statement.executeUpdate("""
+                        CREATE TABLE IF NOT EXISTS pp_round_state (
+                          round_id      TEXT PRIMARY KEY,
+                          snapshot_json TEXT NOT NULL,
+                          saved_at      INTEGER NOT NULL
                         )""");
                 statement.executeUpdate("""
                         CREATE TABLE IF NOT EXISTS pp_scores (
@@ -74,12 +82,15 @@ public final class SqliteScoreDao implements ScoreDao {
     }
 
     @Override
-    public void recordRoundStart(UUID roundId, String courseId, long startedAt) throws StorageException {
-        try (PreparedStatement statement = connection.prepareStatement(
-                "INSERT OR REPLACE INTO pp_rounds (round_id, course_id, started_at) VALUES (?, ?, ?)")) {
+    public void recordRoundStart(UUID roundId, String courseId, String partySnapshotJson, long startedAt)
+            throws StorageException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                INSERT OR REPLACE INTO pp_rounds (round_id, course_id, party_snapshot, state, started_at)
+                VALUES (?, ?, ?, 'IN_PROGRESS', ?)""")) {
             statement.setString(1, roundId.toString());
             statement.setString(2, courseId);
-            statement.setLong(3, startedAt);
+            statement.setString(3, partySnapshotJson);
+            statement.setLong(4, startedAt);
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new StorageException("Could not record round start for " + roundId, ex);
@@ -87,14 +98,76 @@ public final class SqliteScoreDao implements ScoreDao {
     }
 
     @Override
-    public void recordRoundEnd(UUID roundId, long endedAt) throws StorageException {
+    public void recordRoundEnd(UUID roundId, long endedAt, String state) throws StorageException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "UPDATE pp_rounds SET ended_at = ? WHERE round_id = ?")) {
+                "UPDATE pp_rounds SET ended_at = ?, state = ? WHERE round_id = ?")) {
             statement.setLong(1, endedAt);
-            statement.setString(2, roundId.toString());
+            statement.setString(2, state);
+            statement.setString(3, roundId.toString());
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new StorageException("Could not record round end for " + roundId, ex);
+        }
+    }
+
+    @Override
+    public void saveSnapshot(UUID roundId, String snapshotJson, long savedAt) throws StorageException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT OR REPLACE INTO pp_round_state (round_id, snapshot_json, saved_at) VALUES (?, ?, ?)")) {
+            statement.setString(1, roundId.toString());
+            statement.setString(2, snapshotJson);
+            statement.setLong(3, savedAt);
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new StorageException("Could not save a snapshot for " + roundId, ex);
+        }
+    }
+
+    @Override
+    public void clearSnapshot(UUID roundId) throws StorageException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM pp_round_state WHERE round_id = ?")) {
+            statement.setString(1, roundId.toString());
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new StorageException("Could not clear the snapshot for " + roundId, ex);
+        }
+    }
+
+    @Override
+    public List<ResumableRound> resumableRounds(long savedAfter) throws StorageException {
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT r.round_id, r.course_id, r.party_snapshot, s.snapshot_json, s.saved_at
+                FROM pp_rounds r
+                JOIN pp_round_state s ON s.round_id = r.round_id
+                WHERE r.state = 'IN_PROGRESS' AND s.saved_at >= ?
+                ORDER BY s.saved_at DESC""")) {
+            statement.setLong(1, savedAfter);
+            try (ResultSet rows = statement.executeQuery()) {
+                List<ResumableRound> out = new ArrayList<>();
+                while (rows.next()) {
+                    out.add(new ResumableRound(
+                            UUID.fromString(rows.getString("round_id")),
+                            rows.getString("course_id"),
+                            rows.getString("party_snapshot"),
+                            rows.getString("snapshot_json"),
+                            rows.getLong("saved_at")));
+                }
+                return out;
+            }
+        } catch (SQLException ex) {
+            throw new StorageException("Could not read resumable rounds", ex);
+        }
+    }
+
+    @Override
+    public void archiveRound(UUID roundId) throws StorageException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "UPDATE pp_rounds SET state = 'ARCHIVED' WHERE round_id = ?")) {
+            statement.setString(1, roundId.toString());
+            statement.executeUpdate();
+        } catch (SQLException ex) {
+            throw new StorageException("Could not archive round " + roundId, ex);
         }
     }
 

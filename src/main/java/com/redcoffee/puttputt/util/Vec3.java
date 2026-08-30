@@ -33,6 +33,15 @@ public record Vec3(double x, double y, double z) {
         return new Vec3(x, y, nz);
     }
 
+    public double dot(Vec3 o) {
+        return x * o.x + y * o.y + z * o.z;
+    }
+
+    /** Horizontal-only direction from this point to another, normalised. Zero if they coincide. */
+    public Vec3 horizontalDirectionTo(Vec3 o) {
+        return new Vec3(o.x - x, 0.0, o.z - z).normalize();
+    }
+
     public double lengthSquared() {
         return x * x + y * y + z * z;
     }

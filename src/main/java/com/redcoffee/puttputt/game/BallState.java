@@ -58,6 +58,12 @@ public final class BallState {
         return true;
     }
 
+    /** Sets a resting ball moving because something hit it. Unlike a stroke, this is not a putt. */
+    public void wake(Vec3 velocity) {
+        this.velocity = velocity;
+        this.atRest = false;
+    }
+
     /** Parks the ball where it lies and makes that spot the hazard-reset point. */
     public void comeToRest() {
         this.velocity = Vec3.ZERO;

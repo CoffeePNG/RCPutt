@@ -6,13 +6,16 @@ import com.redcoffee.puttputt.course.Hole;
 import com.redcoffee.puttputt.event.RCPuttPuttRoundCompleteEvent;
 import com.redcoffee.puttputt.item.PuttItems;
 import com.redcoffee.puttputt.party.PartyView;
+import com.redcoffee.puttputt.snapshot.RoundSnapshot;
 import com.redcoffee.puttputt.util.Vec3;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.UUID;
 import org.bukkit.Location;
 import org.bukkit.World;
@@ -21,12 +24,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
- * Owns every live round: starting them, ticking their balls, moving players between holes and
- * tearing them down.
+ * Owns every live round: starting them, running the turn loop, ticking balls and tearing them down
+ * (RC-SPEC-PUTTPUTT-001 v2 s3).
  *
- * <p>Balls are keyed on {@code (roundId, player)} and never test against each other, only against
- * course geometry. That is what lets several parties share one course without turning cross-party
- * interference into a support queue.
+ * <p>Play is turn-based, so the loop is a small state machine per round: exactly one player may
+ * charge at a time; once they strike, no new turn begins until <em>every</em> ball on the hole has
+ * come to rest, so knock-ons from a collision fully resolve before the next player is up.
  */
 public final class RoundManager {
 
@@ -36,10 +39,13 @@ public final class RoundManager {
     private final RCPuttPuttPlugin plugin;
     private final PhysicsEngine engine;
     private final PuttItems items;
+    private final Random random = new Random();
 
     private final Map<UUID, Round> roundsById = new LinkedHashMap<>();
     private final Map<UUID, UUID> roundIdByPlayer = new HashMap<>();
+    private final Map<UUID, TurnState> turnStates = new HashMap<>();
     private BukkitTask tickTask;
+    private BukkitTask snapshotTask;
 
     public RoundManager(RCPuttPuttPlugin plugin, PhysicsEngine engine, PuttItems items) {
         this.plugin = plugin;
@@ -52,6 +58,11 @@ public final class RoundManager {
             // Synchronous: every step touches blocks and entities, both main-thread only.
             tickTask = plugin.getServer().getScheduler().runTaskTimer(plugin, this::tick, 1L, 1L);
         }
+        if (snapshotTask == null) {
+            long interval = plugin.config().snapshots().intervalTicks();
+            snapshotTask = plugin.getServer().getScheduler()
+                    .runTaskTimer(plugin, this::snapshotAll, interval, interval);
+        }
     }
 
     public void shutdown() {
@@ -59,8 +70,14 @@ public final class RoundManager {
             tickTask.cancel();
             tickTask = null;
         }
+        if (snapshotTask != null) {
+            snapshotTask.cancel();
+            snapshotTask = null;
+        }
+        // A clean shutdown still snapshots, so a planned restart can be resumed like a crash.
+        snapshotAll();
         for (Round round : List.copyOf(roundsById.values())) {
-            closeRound(round, false);
+            teardown(round, false, false);
         }
     }
 
@@ -71,6 +88,10 @@ public final class RoundManager {
 
     public int activeRounds() {
         return roundsById.size();
+    }
+
+    public Optional<TurnState> turnState(UUID roundId) {
+        return Optional.ofNullable(turnStates.get(roundId));
     }
 
     // ------------------------------------------------------------------ start
@@ -118,172 +139,361 @@ public final class RoundManager {
             return fail("round.party-busy");
         }
 
-        Round round = new Round(course, party.partyId(), new java.util.LinkedHashSet<>(members));
-        roundsById.put(round.roundId(), round);
-        Hole first = course.holes().getFirst();
-        for (UUID memberId : members) {
-            roundIdByPlayer.put(memberId, round.roundId());
-            Player member = plugin.getServer().getPlayer(memberId);
-            if (member != null) {
-                sendToHole(round, member, first);
-                member.getInventory().addItem(items.createPutter(plugin.config().putterItem()));
-            }
-        }
-        plugin.runStorage(dao -> dao.recordRoundStart(round.roundId(), course.id(), round.startedAt()));
+        Round round = new Round(course, party.partyId(), new LinkedHashSet<>(members), random);
+        register(round, members);
+        plugin.runStorage(dao -> dao.recordRoundStart(round.roundId(), course.id(),
+                RoundSnapshot.encodeMembers(members), round.startedAt()));
+        beginHole(round);
         return new StartResult.Started(round);
     }
 
-    // ------------------------------------------------------------------ putting
-
-    /**
-     * Takes a stroke. Returns false when the shot is rejected (no round, ball still rolling, or a
-     * draw too light to count), so the caller can decide whether to say anything about it.
-     */
-    public boolean putt(Player player, double force) {
-        Round round = roundOf(player.getUniqueId()).orElse(null);
-        if (round == null) {
-            return false;
+    private void register(Round round, List<UUID> members) {
+        roundsById.put(round.roundId(), round);
+        turnStates.put(round.roundId(), new TurnState());
+        for (UUID memberId : members) {
+            roundIdByPlayer.put(memberId, round.roundId());
         }
-        Ball ball = round.ball(player.getUniqueId());
-        Scorecard card = round.scorecard(player.getUniqueId());
-        if (ball == null || card == null || card.finished()) {
-            return false;
-        }
-        if (!ball.state().atRest()) {
-            plugin.messages().sendActionBar(player, "putt.still-rolling");
-            return false;
-        }
-        Vec3 aim = directionOf(player);
-        Vec3 velocity = engine.puttVelocity(aim, force);
-        if (velocity.lengthSquared() == 0.0) {
-            return false;
-        }
-        ball.state().strike(velocity);
-        card.addStrokes(1);
-        plugin.messages().sendActionBar(player, "putt.stroke",
-                "strokes", String.valueOf(card.currentStrokes()),
-                "hole", String.valueOf(card.currentHole()));
-        return true;
     }
 
-    private static Vec3 directionOf(Player player) {
-        var direction = player.getLocation().getDirection();
-        return new Vec3(direction.getX(), 0.0, direction.getZ());
+    // ------------------------------------------------------------------ holes and turns
+
+    /** Warps everyone to the tee, gives them a ball and starts the first turn. */
+    private void beginHole(Round round) {
+        Hole hole = round.currentHole().orElse(null);
+        if (hole == null) {
+            teardown(round, true, true);
+            return;
+        }
+        World world = plugin.getServer().getWorld(round.course().world());
+        if (world == null) {
+            return;
+        }
+        round.clearBalls();
+        for (UUID playerId : round.players()) {
+            // Balls are fanned out slightly so several tee shots do not start overlapping - with
+            // ball-ball collision on, co-located balls would shove each other on the first stroke.
+            round.setBall(playerId, spawnBall(world, teeSpotFor(hole, round, playerId)));
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                teleportTo(player, hole.tee(), hole.cup(), world);
+                plugin.messages().send(player, "round.hole-start",
+                        "hole", String.valueOf(hole.number()),
+                        "par", String.valueOf(hole.par()));
+            }
+        }
+        announceOrder(round);
+        beginTurn(round);
+    }
+
+    /**
+     * Spreads tee shots around the tee position. The offset is deterministic per player so a
+     * resumed round puts everyone back where they were.
+     */
+    private Vec3 teeSpotFor(Hole hole, Round round, UUID playerId) {
+        int index = Math.max(0, round.turnOrder().indexOf(playerId));
+        double angle = index * (Math.PI * 2.0 / Math.max(1, round.turnOrder().size()));
+        double spread = plugin.config().ballCollision().contactDistance() * 1.5;
+        return hole.tee().add(Math.cos(angle) * spread, 0.0, Math.sin(angle) * spread);
+    }
+
+    private void announceOrder(Round round) {
+        List<String> names = round.turnOrder().stream().map(this::nameOf).toList();
+        for (UUID playerId : round.players()) {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                plugin.messages().send(player, "turn.order", "order", String.join(", ", names));
+            }
+        }
+    }
+
+    /** Puts the next player on the clock. */
+    private void beginTurn(Round round) {
+        TurnState state = turnStates.get(round.roundId());
+        if (state == null) {
+            return;
+        }
+        state.clearCharge(plugin, round);
+
+        Optional<UUID> next = round.currentPlayer();
+        if (next.isEmpty()) {
+            finishHole(round);
+            return;
+        }
+        UUID playerId = next.get();
+        state.beginTurn(playerId, plugin.config().turns().shotClockTicks());
+
+        Player player = plugin.getServer().getPlayer(playerId);
+        Ball ball = round.ball(playerId);
+        if (player == null) {
+            // Offline mid-round: burn their turn rather than stalling everyone else.
+            timeoutTurn(round, playerId);
+            return;
+        }
+        if (ball != null) {
+            World world = plugin.getServer().getWorld(round.course().world());
+            Hole hole = round.currentHole().orElse(null);
+            if (world != null && hole != null) {
+                // Teleported to their ball, facing the cup: the turn should start ready to aim.
+                teleportTo(player, ball.state().position(), hole.cup(), world);
+            }
+        }
+        ensurePutter(player);
+        plugin.messages().send(player, "turn.yours",
+                "seconds", String.valueOf(plugin.config().turns().shotClockSeconds()));
+        for (UUID other : round.players()) {
+            if (!other.equals(playerId)) {
+                Player watcher = plugin.getServer().getPlayer(other);
+                if (watcher != null) {
+                    plugin.messages().send(watcher, "turn.other", "player", player.getName());
+                }
+            }
+        }
+    }
+
+    private void finishHole(Round round) {
+        Optional<Integer> next = round.advanceHole(plugin.config().turns().mode());
+        if (next.isEmpty()) {
+            teardown(round, true, true);
+            return;
+        }
+        beginHole(round);
     }
 
     // ------------------------------------------------------------------ tick
 
     private void tick() {
         for (Round round : List.copyOf(roundsById.values())) {
-            for (Map.Entry<UUID, Ball> entry : round.balls().entrySet()) {
-                tickBall(round, entry.getKey(), entry.getValue());
+            TurnState state = turnStates.get(round.roundId());
+            if (state == null || round.state() != RoundState.IN_PROGRESS) {
+                continue;
             }
-            if (round.everyoneFinished() && round.state() == RoundState.IN_PROGRESS) {
-                closeRound(round, true);
+            if (round.anyBallMoving()) {
+                tickBalls(round);
+                if (!round.anyBallMoving()) {
+                    // Everything has settled: resolve the stroke and hand over the turn.
+                    afterBallsSettled(round);
+                }
+                continue;
             }
+            tickCharge(round, state);
         }
     }
 
-    private void tickBall(Round round, UUID playerId, Ball ball) {
-        Scorecard card = round.scorecard(playerId);
-        if (card == null || card.finished() || ball.state().atRest()) {
-            return;
-        }
-        Hole hole = round.course().hole(card.currentHole()).orElse(null);
-        // A hole can be edited or deleted mid-round by an admin; without geometry there is nothing
-        // to simulate against, so park the ball rather than stepping it into undefined space.
-        if (hole == null || hole.cup() == null || hole.bounds() == null) {
-            ball.state().comeToRest();
+    /** Drives the power meter for whoever is on the clock, and enforces the shot clock. */
+    private void tickCharge(Round round, TurnState state) {
+        UUID playerId = state.currentPlayer();
+        if (playerId == null) {
+            beginTurn(round);
             return;
         }
         Player player = plugin.getServer().getPlayer(playerId);
-        SurfaceSampler sampler = new WorldSurfaceSampler(
-                ball.world(), plugin.config().surfaces(), hole.materialOverrides());
-
-        StepOutcome outcome = engine.step(ball.state(), sampler, hole.cup());
-
-        // A ball outside the hole's AABB has escaped the geometry the collision model assumes;
-        // treat it exactly like a hazard rather than letting it roll off into the world.
-        if (outcome.result() != StepResult.SUNK && !hole.bounds().contains(ball.state().position())) {
-            ball.snapTo(ball.state().lastRest());
-            card.addStrokes(plugin.config().outOfBoundsPenalty());
-            if (player != null) {
-                plugin.messages().send(player, "putt.out-of-bounds",
-                        "penalty", String.valueOf(plugin.config().outOfBoundsPenalty()));
-            }
+        if (player == null) {
+            timeoutTurn(round, playerId);
             return;
         }
 
-        switch (outcome.result()) {
-            case MOVING -> ball.syncDisplay();
-            case CAME_TO_REST -> ball.syncDisplay();
-            case HAZARD -> {
-                card.addStrokes(outcome.penaltyStrokes());
-                ball.snapTo(ball.state().position());
-                if (player != null) {
-                    plugin.messages().send(player, "putt.hazard",
-                            "surface", outcome.surface().id(),
-                            "penalty", String.valueOf(outcome.penaltyStrokes()));
-                }
+        boolean holding = items.isPutter(player.getInventory().getItemInMainHand()) && player.isHandRaised();
+        if (holding) {
+            state.startChargeIfNeeded(plugin, round, playerId);
+            PowerMeter meter = state.meter();
+            if (meter != null) {
+                double power = meter.tick();
+                meter.updateTitle(plugin.messages().render("power.title",
+                        "player", player.getName(),
+                        "percent", String.valueOf((int) Math.round(power * 100))));
             }
-            case SUNK -> {
-                ball.syncDisplay();
-                onSink(round, playerId, player, card, hole);
+            return;
+        }
+        if (state.meter() != null) {
+            // Released: lock in whatever the bar read at this instant.
+            strike(round, state, player);
+            return;
+        }
+
+        if (state.tickClock()) {
+            timeoutTurn(round, playerId);
+        } else if (state.shouldWarn()) {
+            plugin.messages().sendActionBar(player, "turn.clock",
+                    "seconds", String.valueOf(state.secondsLeft()));
+        }
+    }
+
+    private void strike(Round round, TurnState state, Player player) {
+        PowerMeter meter = state.meter();
+        Ball ball = round.ball(player.getUniqueId());
+        Scorecard card = round.scorecard(player.getUniqueId());
+        double speed = meter.velocity();
+        state.clearCharge(plugin, round);
+
+        if (ball == null || card == null || !ball.state().atRest()) {
+            return;
+        }
+        var direction = player.getLocation().getDirection();
+        ball.state().strike(engine.puttVelocity(new Vec3(direction.getX(), 0, direction.getZ()), speed));
+        card.addStrokes(1);
+        card.clearTimeouts();
+        state.markStruck();
+        plugin.messages().sendActionBar(player, "putt.stroke",
+                "strokes", String.valueOf(card.currentStrokes()),
+                "hole", String.valueOf(round.currentHoleNumber()));
+    }
+
+    private void tickBalls(Round round) {
+        Hole hole = round.currentHole().orElse(null);
+        if (hole == null || hole.cup() == null || hole.bounds() == null) {
+            round.balls().values().forEach(ball -> ball.state().comeToRest());
+            return;
+        }
+        SurfaceSampler sampler = new WorldSurfaceSampler(
+                plugin.getServer().getWorld(round.course().world()),
+                plugin.config().surfaces(), hole.materialOverrides());
+        List<BallState> all = round.ballStates();
+
+        for (Map.Entry<UUID, Ball> entry : List.copyOf(round.balls().entrySet())) {
+            UUID playerId = entry.getKey();
+            Ball ball = entry.getValue();
+            if (ball.state().atRest() || round.hasFinishedThisHole(playerId)) {
+                continue;
+            }
+            StepOutcome outcome = engine.step(ball.state(), sampler, hole.cup(), all);
+            Player player = plugin.getServer().getPlayer(playerId);
+
+            // Outside the hole's AABB the block-based collision model no longer holds, so treat it
+            // exactly like a hazard rather than letting the ball roll off into the world.
+            if (outcome.result() != StepResult.SUNK && !hole.bounds().contains(ball.state().position())) {
+                ball.snapTo(ball.state().lastRest());
+                round.scorecard(playerId).addStrokes(plugin.config().outOfBoundsPenalty());
+                if (player != null) {
+                    plugin.messages().send(player, "putt.out-of-bounds",
+                            "penalty", String.valueOf(plugin.config().outOfBoundsPenalty()));
+                }
+                continue;
+            }
+
+            switch (outcome.result()) {
+                case MOVING, CAME_TO_REST -> ball.syncDisplay();
+                case HAZARD -> {
+                    round.scorecard(playerId).addStrokes(outcome.penaltyStrokes());
+                    ball.snapTo(ball.state().position());
+                    if (player != null) {
+                        plugin.messages().send(player, "putt.hazard",
+                                "surface", outcome.surface().id(),
+                                "penalty", String.valueOf(outcome.penaltyStrokes()));
+                    }
+                }
+                case SUNK -> {
+                    ball.syncDisplay();
+                    sink(round, playerId, hole);
+                }
             }
         }
     }
 
-    private void onSink(Round round, UUID playerId, Player player, Scorecard card, Hole hole) {
+    /** A ball dropped. Whether that counts depends on whether its owner actually hit it. */
+    private void sink(Round round, UUID playerId, Hole hole) {
+        TurnState state = turnStates.get(round.roundId());
+        boolean ownStroke = state == null || playerId.equals(state.currentPlayer());
+        if (!ownStroke && !plugin.config().ballCollision().allowKnockIn()) {
+            // Purist mode: a knocked-in ball is put back rather than counted.
+            Ball ball = round.ball(playerId);
+            if (ball != null) {
+                ball.snapTo(ball.state().lastRest());
+            }
+            return;
+        }
+        if (round.hasFinishedThisHole(playerId)) {
+            return;
+        }
+        round.markFinishedThisHole(playerId);
+        Scorecard card = round.scorecard(playerId);
         int strokes = card.currentStrokes();
+        Player player = plugin.getServer().getPlayer(playerId);
         if (player != null) {
-            plugin.messages().send(player, "putt.sunk",
+            plugin.messages().send(player, ownStroke ? "putt.sunk" : "putt.knocked-in",
                     "hole", String.valueOf(hole.number()),
                     "strokes", String.valueOf(strokes),
                     "par", String.valueOf(hole.par()),
                     "result", scoreName(strokes, hole.par()));
         }
-        Optional<Hole> next = nextHole(round.course(), hole.number());
-        if (next.isEmpty()) {
-            card.finish();
+        Ball ball = round.ball(playerId);
+        if (ball != null) {
+            ball.remove();
+        }
+    }
+
+    /** Called once every ball has stopped: apply the stroke cap, then hand over the turn. */
+    private void afterBallsSettled(Round round) {
+        int cap = plugin.config().turns().maxStrokesPerHole();
+        for (UUID playerId : round.players()) {
+            if (round.hasFinishedThisHole(playerId)) {
+                continue;
+            }
+            if (round.scorecard(playerId).currentStrokes() >= cap) {
+                round.markFinishedThisHole(playerId);
+                Player player = plugin.getServer().getPlayer(playerId);
+                if (player != null) {
+                    plugin.messages().send(player, "turn.capped", "strokes", String.valueOf(cap));
+                }
+            }
+        }
+        if (round.isHoleComplete()) {
+            finishHole(round);
+            return;
+        }
+        round.advanceTurn();
+        beginTurn(round);
+    }
+
+    private void timeoutTurn(Round round, UUID playerId) {
+        Scorecard card = round.scorecard(playerId);
+        TurnState state = turnStates.get(round.roundId());
+        if (card == null) {
+            if (state != null) {
+                state.clearCharge(plugin, round);
+            }
+            round.advanceTurn();
+            beginTurn(round);
+            return;
+        }
+        card.addStrokes(plugin.config().turns().timeoutPenalty());
+        card.recordTimeout();
+        Player player = plugin.getServer().getPlayer(playerId);
+        if (player != null) {
+            plugin.messages().send(player, "turn.timeout",
+                    "penalty", String.valueOf(plugin.config().turns().timeoutPenalty()));
+        }
+        // Repeated forfeits mean an AFK player; cap them out so the hole can finish.
+        if (card.consecutiveTimeouts() >= plugin.config().turns().maxConsecutiveTimeouts()) {
+            card.addStrokes(Math.max(0, plugin.config().turns().maxStrokesPerHole() - card.currentStrokes()));
+            round.markFinishedThisHole(playerId);
             Ball ball = round.ball(playerId);
             if (ball != null) {
                 ball.remove();
             }
-            if (player != null) {
-                plugin.messages().send(player, "round.player-finished",
-                        "strokes", String.valueOf(card.totalStrokes()),
-                        "diff", formatDiff(round.parDiffFor(playerId)));
-            }
+        }
+        if (round.isHoleComplete()) {
+            finishHole(round);
             return;
         }
-        card.completeHole(next.get().number());
-        if (player != null) {
-            sendToHole(round, player, next.get());
-        }
+        round.advanceTurn();
+        beginTurn(round);
     }
 
-    private static Optional<Hole> nextHole(Course course, int afterNumber) {
-        return course.holes().stream().filter(h -> h.number() > afterNumber).findFirst();
+    // ------------------------------------------------------------------ helpers
+
+    private void teleportTo(Player player, Vec3 target, Vec3 lookAt, World world) {
+        Location location = new Location(world, target.x(), target.y(), target.z());
+        if (lookAt != null) {
+            location.setDirection(new Location(world, lookAt.x(), lookAt.y(), lookAt.z())
+                    .toVector().subtract(location.toVector()));
+        }
+        player.teleport(location);
     }
 
-    // ------------------------------------------------------------------ hole setup
-
-    /** Teleports the player to a tee and gives them a fresh ball there. */
-    public void sendToHole(Round round, Player player, Hole hole) {
-        World world = plugin.getServer().getWorld(round.course().world());
-        if (world == null) {
-            return;
+    private void ensurePutter(Player player) {
+        if (!items.hasPutter(player)) {
+            player.getInventory().addItem(items.createPutter(plugin.config().putterItem()));
         }
-        Location tee = new Location(world, hole.tee().x(), hole.tee().y(), hole.tee().z());
-        // Face the cup so the first stroke starts from a sane aim rather than wherever they walked in from.
-        Location cup = new Location(world, hole.cup().x(), hole.cup().y(), hole.cup().z());
-        tee.setDirection(cup.toVector().subtract(tee.toVector()));
-        player.teleport(tee);
-
-        round.setBall(player.getUniqueId(), spawnBall(world, hole.tee()));
-        plugin.messages().send(player, "round.hole-start",
-                "hole", String.valueOf(hole.number()),
-                "par", String.valueOf(hole.par()));
     }
 
     private Ball spawnBall(World world, Vec3 position) {
@@ -301,10 +511,20 @@ public final class RoundManager {
         if (round == null) {
             return false;
         }
-        removeFromRound(round, player.getUniqueId());
+        UUID playerId = player.getUniqueId();
+        TurnState state = turnStates.get(round.roundId());
+        boolean wasTheirTurn = state != null && playerId.equals(state.currentPlayer());
+        removeFromRound(round, playerId);
         plugin.messages().send(player, "round.left");
         if (round.players().isEmpty()) {
-            closeRound(round, false);
+            teardown(round, false, true);
+            return true;
+        }
+        if (wasTheirTurn) {
+            // Never leave the round waiting on someone who has gone.
+            state.clearCharge(plugin, round);
+            round.advanceTurn();
+            beginTurn(round);
         }
         return true;
     }
@@ -318,9 +538,13 @@ public final class RoundManager {
         }
     }
 
-    /** Ends the round for everyone. {@code persist} is false when nothing was actually completed. */
+    /** Ends the round for everyone. */
     public void closeRound(Round round, boolean persist) {
-        if (round.state() == RoundState.COMPLETE && !roundsById.containsKey(round.roundId())) {
+        teardown(round, persist, true);
+    }
+
+    private void teardown(Round round, boolean persist, boolean clearSnapshot) {
+        if (!roundsById.containsKey(round.roundId())) {
             return;
         }
         round.markComplete();
@@ -332,7 +556,7 @@ public final class RoundManager {
             for (Map.Entry<UUID, Scorecard> entry : round.scorecards().entrySet()) {
                 UUID playerId = entry.getKey();
                 Scorecard card = entry.getValue();
-                if (!card.finished()) {
+                if (!card.finishedRound()) {
                     // An unfinished card is not a comparable round; leave it off the leaderboard.
                     continue;
                 }
@@ -345,8 +569,16 @@ public final class RoundManager {
                         round.course().id(), total, diff, endedAt));
             }
         }
-        plugin.runStorage(dao -> dao.recordRoundEnd(round.roundId(), endedAt));
+        plugin.runStorage(dao -> dao.recordRoundEnd(round.roundId(), endedAt,
+                persist ? "COMPLETE" : "ARCHIVED"));
+        if (clearSnapshot) {
+            plugin.runStorage(dao -> dao.clearSnapshot(round.roundId()));
+        }
 
+        TurnState state = turnStates.remove(round.roundId());
+        if (state != null) {
+            state.clearCharge(plugin, round);
+        }
         for (UUID playerId : round.players()) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null) {
@@ -354,15 +586,50 @@ public final class RoundManager {
             }
             removeFromRound(round, playerId);
         }
-        for (Ball ball : round.balls().values()) {
-            ball.remove();
-        }
+        round.clearBalls();
         roundsById.remove(round.roundId());
         plugin.parties().releaseActivityLock(round.partyId(), ACTIVITY_ID);
 
         // Fired last, once the round is fully torn down, so a wager layer settling on it sees final state.
         plugin.getServer().getPluginManager().callEvent(
                 new RCPuttPuttRoundCompleteEvent(round.roundId(), round.course().id(), round.partyId(), totals, diffs));
+    }
+
+    // ------------------------------------------------------------------ snapshots
+
+    private void snapshotAll() {
+        for (Round round : List.copyOf(roundsById.values())) {
+            if (round.state() != RoundState.IN_PROGRESS) {
+                continue;
+            }
+            TurnState state = turnStates.get(round.roundId());
+            RoundSnapshot snapshot = RoundSnapshot.capture(round, state);
+            plugin.runStorage(dao -> dao.saveSnapshot(round.roundId(), snapshot.toJson(), System.currentTimeMillis()));
+        }
+    }
+
+    /** Restores a round read back from a snapshot and puts its players back on the clock. */
+    public void resume(Round round, RoundSnapshot snapshot, List<UUID> members) {
+        register(round, members);
+        snapshot.applyTo(round);
+        World world = plugin.getServer().getWorld(round.course().world());
+        Hole hole = round.currentHole().orElse(null);
+        if (world == null || hole == null) {
+            teardown(round, false, true);
+            return;
+        }
+        for (UUID playerId : round.players()) {
+            Vec3 position = snapshot.ballPositions().getOrDefault(playerId, hole.tee());
+            round.setBall(playerId, spawnBall(world, position));
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player != null) {
+                teleportTo(player, position, hole.cup(), world);
+                plugin.messages().send(player, "round.resumed",
+                        "course", round.course().displayComponent(),
+                        "hole", String.valueOf(round.currentHoleNumber()));
+            }
+        }
+        beginTurn(round);
     }
 
     private String nameOf(UUID playerId) {
@@ -399,5 +666,4 @@ public final class RoundManager {
             default -> strokes < par ? "Under par" : "Over par";
         };
     }
-
 }

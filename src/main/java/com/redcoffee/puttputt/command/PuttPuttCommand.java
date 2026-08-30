@@ -150,7 +150,7 @@ public final class PuttPuttCommand {
             Integer strokes = card.strokesFor(hole.number());
             String value = strokes != null
                     ? String.valueOf(strokes)
-                    : (hole.number() == card.currentHole() ? card.currentStrokes() + "*" : "-");
+                    : (hole.number() == round.currentHoleNumber() ? card.currentStrokes() + "*" : "-");
             plugin.messages().send(player, "scorecard.row",
                     "hole", String.valueOf(hole.number()),
                     "par", String.valueOf(hole.par()),

@@ -23,7 +23,11 @@ public final class PluginConfig {
     private final SurfaceRegistry surfaces = new SurfaceRegistry();
     private final Messages messages = new Messages();
     private ItemDefinition ballItem = new ItemDefinition("SNOWBALL", null, null, "<white>Golf Ball</white>");
-    private ItemDefinition putterItem = new ItemDefinition("BOW", null, null, "<gold>Putter</gold>");
+    private ItemDefinition putterItem = new ItemDefinition("IRON_SHOVEL", null, null, "<gold>Putter</gold>");
+    private BallCollisionConfig ballCollision = BallCollisionConfig.DEFAULTS;
+    private TurnConfig turns = TurnConfig.DEFAULTS;
+    private PowerMeterConfig powerMeter = PowerMeterConfig.DEFAULTS;
+    private SnapshotConfig snapshots = SnapshotConfig.DEFAULTS;
     private boolean economyEnabled;
     private int leaderboardSize = 10;
     private double outOfBoundsPenalty = 1;
@@ -38,7 +42,11 @@ public final class PluginConfig {
         readMaterialMap(config.getConfigurationSection("material_map"));
         messages.load(config.getConfigurationSection("messages"));
         ballItem = ItemDefinition.read(config.getConfigurationSection("items.ball"), "SNOWBALL", "<white>Golf Ball</white>");
-        putterItem = ItemDefinition.read(config.getConfigurationSection("items.putter"), "BOW", "<gold>Putter</gold>");
+        putterItem = ItemDefinition.read(config.getConfigurationSection("items.putter"), "IRON_SHOVEL", "<gold>Putter</gold>");
+        ballCollision = readBallCollision(config.getConfigurationSection("ball-collision"));
+        turns = readTurns(config);
+        powerMeter = readPowerMeter(config.getConfigurationSection("power-meter"));
+        snapshots = readSnapshots(config.getConfigurationSection("snapshot"));
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
         outOfBoundsPenalty = Math.max(0, config.getInt("out_of_bounds.penalty", 1));
@@ -54,8 +62,7 @@ public final class PluginConfig {
                     section.getDouble("max_velocity", defaults.maxVelocity()),
                     section.getDouble("rest_epsilon", defaults.restEpsilon()),
                     section.getDouble("max_sink_speed", defaults.maxSinkSpeed()),
-                    section.getDouble("sink_radius", defaults.sinkRadius()),
-                    section.getDouble("max_putt_power", defaults.maxPuttPower()));
+                    section.getDouble("sink_radius", defaults.sinkRadius()));
         } catch (IllegalArgumentException ex) {
             // A bad constant (usually max_velocity >= 1, which would let balls tunnel through walls)
             // must not start a server that silently plays wrong.
@@ -76,6 +83,12 @@ public final class PluginConfig {
                 continue;
             }
             SurfaceType type = SurfaceType.parse(node.getString("type"), SurfaceType.ROLL);
+            // A current is an impulse with a different name and, usually, preventRest - so accept
+            // either key and let the type decide how it behaves.
+            Impulse push = readImpulse(node.getConfigurationSection("impulse"), id);
+            if (push == null) {
+                push = readImpulse(node.getConfigurationSection("current"), id);
+            }
             Surface surface = new Surface(
                     id,
                     type,
@@ -83,9 +96,11 @@ public final class PluginConfig {
                     node.getDouble("restitution", 0.70),
                     node.getInt("penalty", 1),
                     ResetMode.parse(node.getString("reset"), ResetMode.LAST_REST),
-                    readImpulse(node.getConfigurationSection("impulse"), id));
-            if (type == SurfaceType.IMPULSE && !surface.hasImpulse()) {
-                logger.warning("Surface '" + id + "' is type impulse but defines no impulse; it will just roll.");
+                    push,
+                    node.getBoolean("preventRest", type == SurfaceType.CURRENT));
+            if ((type == SurfaceType.IMPULSE || type == SurfaceType.CURRENT) && !surface.hasImpulse()) {
+                logger.warning("Surface '" + id + "' is type " + type
+                        + " but defines no direction/strength; it will just roll.");
             }
             surfaces.register(surface);
         }
@@ -132,6 +147,86 @@ public final class PluginConfig {
             }
             surfaces.mapMaterial(material, surfaceId);
         }
+    }
+
+    private BallCollisionConfig readBallCollision(ConfigurationSection section) {
+        if (section == null) {
+            return BallCollisionConfig.DEFAULTS;
+        }
+        BallCollisionConfig defaults = BallCollisionConfig.DEFAULTS;
+        try {
+            return new BallCollisionConfig(
+                    section.getBoolean("enabled", defaults.enabled()),
+                    section.getDouble("restitution", defaults.restitution()),
+                    section.getDouble("radius", defaults.radius()),
+                    section.getBoolean("allow-knock-in", defaults.allowKnockIn()));
+        } catch (IllegalArgumentException ex) {
+            logger.warning("Invalid ball-collision config (" + ex.getMessage() + "); using defaults.");
+            return defaults;
+        }
+    }
+
+    private TurnConfig readTurns(FileConfiguration config) {
+        TurnConfig defaults = TurnConfig.DEFAULTS;
+        try {
+            return new TurnConfig(
+                    TurnOrderMode.parse(config.getString("turn-order.mode"), defaults.mode()),
+                    config.getInt("shot-clock.seconds", defaults.shotClockSeconds()),
+                    config.getInt("shot-clock.timeout-penalty", defaults.timeoutPenalty()),
+                    config.getInt("shot-clock.max-consecutive-timeouts", defaults.maxConsecutiveTimeouts()),
+                    config.getInt("max-strokes-per-hole", defaults.maxStrokesPerHole()));
+        } catch (IllegalArgumentException ex) {
+            logger.warning("Invalid turn/shot-clock config (" + ex.getMessage() + "); using defaults.");
+            return defaults;
+        }
+    }
+
+    private PowerMeterConfig readPowerMeter(ConfigurationSection section) {
+        if (section == null) {
+            return PowerMeterConfig.DEFAULTS;
+        }
+        PowerMeterConfig defaults = PowerMeterConfig.DEFAULTS;
+        try {
+            return new PowerMeterConfig(
+                    PowerMeterConfig.Mode.parse(section.getString("mode"), defaults.mode()),
+                    section.getDouble("min-velocity", defaults.minVelocity()),
+                    section.getDouble("max-velocity", defaults.maxVelocity()),
+                    section.getInt("sweep-ticks", defaults.sweepTicks()));
+        } catch (IllegalArgumentException ex) {
+            logger.warning("Invalid power-meter config (" + ex.getMessage() + "); using defaults.");
+            return defaults;
+        }
+    }
+
+    private SnapshotConfig readSnapshots(ConfigurationSection section) {
+        if (section == null) {
+            return SnapshotConfig.DEFAULTS;
+        }
+        SnapshotConfig defaults = SnapshotConfig.DEFAULTS;
+        try {
+            return new SnapshotConfig(
+                    section.getInt("interval-seconds", defaults.intervalSeconds()),
+                    section.getInt("resume-window-minutes", defaults.resumeWindowMinutes()));
+        } catch (IllegalArgumentException ex) {
+            logger.warning("Invalid snapshot config (" + ex.getMessage() + "); using defaults.");
+            return defaults;
+        }
+    }
+
+    public BallCollisionConfig ballCollision() {
+        return ballCollision;
+    }
+
+    public TurnConfig turns() {
+        return turns;
+    }
+
+    public PowerMeterConfig powerMeter() {
+        return powerMeter;
+    }
+
+    public SnapshotConfig snapshots() {
+        return snapshots;
     }
 
     public PhysicsConfig physics() {

@@ -6,17 +6,20 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityShootBowEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 /**
- * Turns bow input into strokes and keeps a round's props and players intact.
+ * Keeps a round's props and players intact, and gates putter input to whoever is on the clock.
  *
- * <p>The putter <em>is</em> a bow: face to aim, draw to set power. That is vanilla input everyone
- * already understands, and {@link EntityShootBowEvent#getForce()} hands over the draw as 0..1 with
- * no draw-tracking of our own.
+ * <p>The charge itself is <em>not</em> driven from events. The putter is a shovel carrying a
+ * {@code consumable} component purely so right-click-hold registers as an in-progress use, and
+ * {@code RoundManager} polls {@link Player#isHandRaised()} each tick. Events only reject input from
+ * players it is not the turn of, and stop the consume from ever completing.
  */
 public final class PuttListener implements Listener {
 
@@ -26,21 +29,40 @@ public final class PuttListener implements Listener {
         this.plugin = plugin;
     }
 
+    /** Tells a player why nothing happened when they charge out of turn. */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onShoot(EntityShootBowEvent event) {
-        if (!(event.getEntity() instanceof Player player) || !plugin.items().isPutter(event.getBow())) {
+    public void onInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-        // The arrow is never wanted: the bow is only an input device here.
-        event.setCancelled(true);
-        if (event.getProjectile() != null) {
-            event.getProjectile().remove();
+        Player player = event.getPlayer();
+        if (!plugin.items().isPutter(event.getItem())) {
+            return;
         }
-        if (plugin.rounds().roundOf(player.getUniqueId()).isEmpty()) {
+        Round round = plugin.rounds().roundOf(player.getUniqueId()).orElse(null);
+        if (round == null) {
             plugin.messages().sendActionBar(player, "putt.no-round");
+            event.setCancelled(true);
             return;
         }
-        plugin.rounds().putt(player, event.getForce());
+        boolean theirTurn = plugin.rounds().turnState(round.roundId())
+                .map(state -> player.getUniqueId().equals(state.currentPlayer()))
+                .orElse(false);
+        if (!theirTurn) {
+            plugin.messages().sendActionBar(player, "turn.not-yours");
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * The putter's consumable component exists only to make hold-to-charge detectable. If a hold
+     * ever ran long enough to finish, this stops the item being eaten.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onConsume(PlayerItemConsumeEvent event) {
+        if (plugin.items().isPutter(event.getItem())) {
+            event.setCancelled(true);
+        }
     }
 
     /** A putter is round equipment, not loot - it should not end up on the floor. */
@@ -63,13 +85,12 @@ public final class PuttListener implements Listener {
     }
 
     /**
-     * A disconnect drops the player from the round. Disconnect-grace resumption is explicitly out
-     * of scope for v1, so leaving cleanly beats holding a slot nobody can reclaim.
+     * A disconnect drops the player from the round. Their turn is handed on immediately so the
+     * rest of the party is never left waiting on someone who has gone.
      */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
-        Round round = plugin.rounds().roundOf(event.getPlayer().getUniqueId()).orElse(null);
-        if (round != null) {
+        if (plugin.rounds().roundOf(event.getPlayer().getUniqueId()).isPresent()) {
             plugin.rounds().leave(event.getPlayer());
         }
     }
