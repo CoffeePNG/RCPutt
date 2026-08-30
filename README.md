@@ -138,17 +138,42 @@ Aliases: `/pp`, `/golf`.
 
 ### Building a course in-world
 
-No hand-editing geometry. Pick a course once, then walk the holes:
+No hand-editing geometry. Pick a course once, then walk the holes.
+
+**With the wand (recommended):**
 
 ```
 /puttputt admin create <course>       # creates and selects it, in your current world
+/puttputt admin wand                  # hands you the builder wand
+/puttputt admin hole 1                # which hole the wand edits
+```
+
+Then, holding the wand:
+
+| Input | Sets |
+|---|---|
+| left-click a block | corner 1 |
+| right-click a block | corner 2 |
+| **sneak** + left-click | tee for the selected hole |
+| **sneak** + right-click | cup for the selected hole |
+
+…then `/puttputt admin setbounds` (no hole argument needed — it uses the wand's hole),
+`/puttputt admin setpar <hole> <par>`, and `/puttputt admin hole 2` for the next one.
+
+Wand marks land on the **top face** of the clicked block, which is exactly the plane the physics
+rolls a ball along. That is the reason to prefer the wand: the stand-here commands capture your feet,
+so standing on a slab, stair or carpet records a fractional Y and leaves the ball sampling the wrong
+ground layer. The wand cannot make that mistake.
+
+**Without the wand**, every mark has a command equivalent:
+
+```
 /puttputt admin select <course>       # switch to an existing one
 /puttputt admin settee <hole>         # your position
 /puttputt admin setcup <hole>         # your position
 /puttputt admin setpar <hole> <par>
-/puttputt admin pos1                  # two-corner capture...
-/puttputt admin pos2
-/puttputt admin setbounds <hole>      # ...becomes the hole's AABB
+/puttputt admin pos1 / pos2           # two-corner capture from where you stand
+/puttputt admin setbounds [hole]      # ...becomes the hole's AABB
 /puttputt admin surface <material> <surfaceId> [hole]   # global, or per-hole override
 /puttputt admin tphole <course> <hole>
 /puttputt admin delhole <hole>

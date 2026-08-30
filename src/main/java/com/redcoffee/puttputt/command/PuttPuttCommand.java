@@ -17,7 +17,6 @@ import com.redcoffee.puttputt.util.Vec3;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -43,7 +42,6 @@ public final class PuttPuttCommand {
     private static final String ADMIN_PERMISSION = "rcputtputt.admin";
 
     private final RCPuttPuttPlugin plugin;
-    private final Map<UUID, BuilderSession> sessions = new HashMap<>();
 
     public PuttPuttCommand(RCPuttPuttPlugin plugin) {
         this.plugin = plugin;
@@ -237,6 +235,8 @@ public final class PuttPuttCommand {
                 .then(Commands.literal("pos1").executes(context -> adminCorner(context, true)))
                 .then(Commands.literal("pos2").executes(context -> adminCorner(context, false)))
                 .then(Commands.literal("setbounds")
+                        // No hole argument: apply to whichever hole the wand is editing.
+                        .executes(this::adminSetBoundsSelected)
                         .then(Commands.argument("hole", IntegerArgumentType.integer(1))
                                 .executes(this::adminSetBounds)))
                 .then(Commands.literal("delhole")
@@ -255,6 +255,10 @@ public final class PuttPuttCommand {
                                 .suggests(courseSuggestions())
                                 .then(Commands.argument("hole", IntegerArgumentType.integer(1))
                                         .executes(this::adminTpHole))))
+                .then(Commands.literal("wand").executes(this::adminWand))
+                .then(Commands.literal("hole")
+                        .then(Commands.argument("hole", IntegerArgumentType.integer(1))
+                                .executes(this::adminHole)))
                 .then(Commands.literal("info").executes(this::adminInfo))
                 .then(Commands.literal("save").executes(this::adminSave))
                 .then(Commands.literal("reload").executes(this::adminReload))
@@ -276,6 +280,7 @@ public final class PuttPuttCommand {
         }
         Course course = plugin.courses().create(courseId, player.getWorld().getName());
         session(player).selectCourse(course.id());
+        session(player).selectHole(1);
         plugin.messages().send(player, "admin.course-created",
                 "course", course.id(), "world", course.world());
         return 1;
@@ -293,6 +298,7 @@ public final class PuttPuttCommand {
             return 0;
         }
         session(player).selectCourse(course.id());
+        session(player).selectHole(1);
         plugin.messages().send(player, "admin.course-selected", "course", course.id());
         return 1;
     }
@@ -341,15 +347,30 @@ public final class PuttPuttCommand {
     }
 
     private int adminSetBounds(CommandContext<CommandSourceStack> context) {
-        return editHole(context, (player, course, hole) -> {
-            BuilderSession session = session(player);
-            if (!session.hasBothCorners()) {
-                plugin.messages().send(player, "admin.no-selection");
-                return;
-            }
-            hole.setBounds(session.toBounds());
-            plugin.messages().send(player, "admin.bounds-set", "hole", String.valueOf(hole.number()));
-        });
+        return editHole(context, (player, course, hole) -> applyBounds(player, hole));
+    }
+
+    private int adminSetBoundsSelected(CommandContext<CommandSourceStack> context) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        Course course = selectedCourse(player);
+        if (course == null) {
+            return 0;
+        }
+        applyBounds(player, course.holeOrCreate(session(player).currentHole()));
+        return 1;
+    }
+
+    private void applyBounds(Player player, Hole hole) {
+        BuilderSession session = session(player);
+        if (!session.hasBothCorners()) {
+            plugin.messages().send(player, "admin.no-selection");
+            return;
+        }
+        hole.setBounds(session.toBounds());
+        plugin.messages().send(player, "admin.bounds-set", "hole", String.valueOf(hole.number()));
     }
 
     private int adminDeleteHole(CommandContext<CommandSourceStack> context) {
@@ -431,6 +452,27 @@ public final class PuttPuttCommand {
         Vec3 tee = hole.get().tee();
         player.teleport(new Location(world, tee.x(), tee.y(), tee.z()));
         session(player).selectCourse(course.id());
+        return 1;
+    }
+
+    private int adminWand(CommandContext<CommandSourceStack> context) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        player.getInventory().addItem(plugin.items().createWand(plugin.config().wandItem()));
+        plugin.messages().send(player, "wand.given", "hole", String.valueOf(session(player).currentHole()));
+        return 1;
+    }
+
+    private int adminHole(CommandContext<CommandSourceStack> context) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        int hole = IntegerArgumentType.getInteger(context, "hole");
+        session(player).selectHole(hole);
+        plugin.messages().send(player, "wand.hole-selected", "hole", String.valueOf(hole));
         return 1;
     }
 
@@ -525,7 +567,7 @@ public final class PuttPuttCommand {
     }
 
     private BuilderSession session(Player player) {
-        return sessions.computeIfAbsent(player.getUniqueId(), id -> new BuilderSession());
+        return plugin.builders().of(player.getUniqueId());
     }
 
     private Player requirePlayer(CommandContext<CommandSourceStack> context) {

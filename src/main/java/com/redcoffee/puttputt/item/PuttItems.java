@@ -27,10 +27,27 @@ public final class PuttItems {
 
     private final Plugin plugin;
     private final NamespacedKey putterKey;
+    private final NamespacedKey wandKey;
 
     public PuttItems(Plugin plugin) {
         this.plugin = plugin;
         this.putterKey = new NamespacedKey(plugin, "putter");
+        this.wandKey = new NamespacedKey(plugin, "wand");
+    }
+
+    /** The course-builder wand. Tagged in the PDC so an ordinary blaze rod is never mistaken for one. */
+    public ItemStack createWand(ItemDefinition definition) {
+        ItemStack stack = build(definition, Material.BLAZE_ROD);
+        stack.editPersistentDataContainer(container ->
+                container.set(wandKey, PersistentDataType.BYTE, (byte) 1));
+        return stack;
+    }
+
+    public boolean isWand(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        return stack.getPersistentDataContainer().has(wandKey, PersistentDataType.BYTE);
     }
 
     /**

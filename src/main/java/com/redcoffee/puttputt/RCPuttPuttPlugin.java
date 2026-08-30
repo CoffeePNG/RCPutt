@@ -1,5 +1,6 @@
 package com.redcoffee.puttputt;
 
+import com.redcoffee.puttputt.command.BuilderSessions;
 import com.redcoffee.puttputt.command.PuttPuttCommand;
 import com.redcoffee.puttputt.config.Messages;
 import com.redcoffee.puttputt.config.PluginConfig;
@@ -9,6 +10,7 @@ import com.redcoffee.puttputt.game.Round;
 import com.redcoffee.puttputt.game.RoundManager;
 import com.redcoffee.puttputt.snapshot.RoundSnapshot;
 import com.redcoffee.puttputt.input.PuttListener;
+import com.redcoffee.puttputt.input.WandListener;
 import com.redcoffee.puttputt.item.PuttItems;
 import com.redcoffee.puttputt.party.PartyProvider;
 import com.redcoffee.puttputt.party.RCPartiesProvider;
@@ -27,6 +29,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class RCPuttPuttPlugin extends JavaPlugin {
 
     private final PluginConfig config = new PluginConfig(getLogger());
+    private final BuilderSessions builders = new BuilderSessions();
     private CourseManager courses;
     private RoundManager rounds;
     private PuttItems items;
@@ -58,6 +61,7 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         rounds.start();
 
         getServer().getPluginManager().registerEvents(new PuttListener(this), this);
+        getServer().getPluginManager().registerEvents(new WandListener(this), this);
 
         PuttPuttCommand commands = new PuttPuttCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -138,6 +142,10 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
 
     public RoundManager rounds() {
         return rounds;
+    }
+
+    public BuilderSessions builders() {
+        return builders;
     }
 
     public PuttItems items() {
