@@ -120,23 +120,29 @@ public final class SqliteScoreDao implements ScoreDao {
 
     @Override
     public List<LeaderboardEntry> leaderboard(String courseId, int limit) throws StorageException {
-        // One row per player: their best round, with ties broken by who got there first.
+        // One row per player: their best round, ties broken by who got there first.
+        //
+        // A window function rather than a grouped subquery on purpose. Matching on
+        // (player_uuid, MIN(total_strokes), MIN(completed_at)) looks equivalent but is not: the two
+        // aggregates are computed independently, so a player whose best round was not also their
+        // earliest matches no row and drops off the leaderboard entirely. ROW_NUMBER ranks whole
+        // rows, so the score, par diff and name all come from the same round.
         String sql = """
                 SELECT player_uuid, player_name, total_strokes, par_diff, completed_at
-                FROM pp_scores
-                WHERE course_id = ?
-                  AND (player_uuid, total_strokes, completed_at) IN (
-                        SELECT player_uuid, MIN(total_strokes), MIN(completed_at)
-                        FROM pp_scores
-                        WHERE course_id = ?
-                        GROUP BY player_uuid)
-                GROUP BY player_uuid
+                FROM (
+                  SELECT player_uuid, player_name, total_strokes, par_diff, completed_at,
+                         ROW_NUMBER() OVER (
+                           PARTITION BY player_uuid
+                           ORDER BY total_strokes ASC, completed_at ASC) AS rank_in_player
+                  FROM pp_scores
+                  WHERE course_id = ?
+                )
+                WHERE rank_in_player = 1
                 ORDER BY total_strokes ASC, completed_at ASC
                 LIMIT ?""";
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, courseId);
-            statement.setString(2, courseId);
-            statement.setInt(3, Math.max(1, limit));
+            statement.setInt(2, Math.max(1, limit));
             try (ResultSet rows = statement.executeQuery()) {
                 List<LeaderboardEntry> entries = new ArrayList<>();
                 while (rows.next()) {
