@@ -255,6 +255,11 @@ public final class PuttPuttCommand {
                                 .suggests(courseSuggestions())
                                 .then(Commands.argument("hole", IntegerArgumentType.integer(1))
                                         .executes(this::adminTpHole))))
+                .then(Commands.literal("addtp")
+                        .executes(context -> adminAddTeleport(context, true))
+                        .then(Commands.literal("stop")
+                                .executes(context -> adminAddTeleport(context, false))))
+                .then(Commands.literal("cleartp").executes(this::adminClearTeleports))
                 .then(Commands.literal("wand").executes(this::adminWand))
                 .then(Commands.literal("hole")
                         .then(Commands.argument("hole", IntegerArgumentType.integer(1))
@@ -452,6 +457,55 @@ public final class PuttPuttCommand {
         Vec3 tee = hole.get().tee();
         player.teleport(new Location(world, tee.x(), tee.y(), tee.z()));
         session(player).selectCourse(course.id());
+        return 1;
+    }
+
+    /**
+     * Links a teleport pad using the existing two-corner selection: corner 1 is the pad you roll
+     * onto, corner 2 is where the ball comes out. Reusing pos1/pos2 means the wand needs no extra
+     * bindings to place pads.
+     */
+    private int adminAddTeleport(CommandContext<CommandSourceStack> context, boolean keepVelocity) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        Course course = selectedCourse(player);
+        if (course == null) {
+            return 0;
+        }
+        BuilderSession session = session(player);
+        if (!session.hasBothCorners()) {
+            plugin.messages().send(player, "admin.no-selection");
+            return 0;
+        }
+        Hole hole = course.holeOrCreate(session.currentHole());
+        Vec3 from = session.corner1();
+        Vec3 to = session.corner2();
+        // corner1 marks the pad's top face, so the block you roll onto is the one below it.
+        hole.addTeleport(from.blockX(), (int) Math.floor(from.y()) - 1, from.blockZ(), to, keepVelocity);
+        plugin.messages().send(player, "admin.teleport-added",
+                "hole", String.valueOf(hole.number()),
+                "from", from.blockX() + ", " + ((int) Math.floor(from.y()) - 1) + ", " + from.blockZ(),
+                "to", to.blockX() + ", " + (int) Math.floor(to.y()) + ", " + to.blockZ(),
+                "mode", keepVelocity ? "keeps speed" : "stops");
+        return 1;
+    }
+
+    private int adminClearTeleports(CommandContext<CommandSourceStack> context) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        Course course = selectedCourse(player);
+        if (course == null) {
+            return 0;
+        }
+        Hole hole = course.holeOrCreate(session(player).currentHole());
+        int removed = hole.teleportCount();
+        hole.clearTeleports();
+        plugin.messages().send(player, "admin.teleports-cleared",
+                "hole", String.valueOf(hole.number()), "count", String.valueOf(removed));
         return 1;
     }
 

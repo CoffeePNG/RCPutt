@@ -37,15 +37,15 @@ public final class PhysicsEngine {
     /**
      * Advances one ball by a single tick.
      *
-     * @param ball    the ball to move; mutated in place
-     * @param sampler surface lookup for the hole being played
-     * @param cup     centre of the cup, used for the sink gate
-     * @param others  every other ball on this hole; a struck one is woken in place
+     * @param ball   the ball to move; mutated in place
+     * @param hole   surfaces, cup, region and pads for the hole being played
+     * @param others every other ball on this hole; a struck one is woken in place
      */
-    public StepOutcome step(BallState ball, SurfaceSampler sampler, Vec3 cup, List<BallState> others) {
+    public StepOutcome step(BallState ball, HoleContext hole, List<BallState> others) {
         if (ball.atRest()) {
-            return StepOutcome.of(StepResult.CAME_TO_REST, groundSurface(ball.position(), sampler));
+            return StepOutcome.of(StepResult.CAME_TO_REST, groundSurface(ball.position(), hole));
         }
+        ball.tickTeleportCooldown();
 
         // 1-2. Integrate, then resolve walls one axis at a time. Axis separation is what makes a
         // corner bounce come out right: a ball that clips a wall on X only loses its X component.
@@ -54,7 +54,7 @@ public final class PhysicsEngine {
         int wallY = position.blockY();
 
         double nextX = position.x() + velocity.x();
-        Surface alongX = sampler.at((int) Math.floor(nextX), wallY, position.blockZ());
+        Surface alongX = hole.surfaceAt((int) Math.floor(nextX), wallY, position.blockZ());
         if (alongX.isWall()) {
             velocity = velocity.withX(-velocity.x() * alongX.restitution());
         } else {
@@ -62,7 +62,7 @@ public final class PhysicsEngine {
         }
 
         double nextZ = position.z() + velocity.z();
-        Surface alongZ = sampler.at(position.blockX(), wallY, (int) Math.floor(nextZ));
+        Surface alongZ = hole.surfaceAt(position.blockX(), wallY, (int) Math.floor(nextZ));
         if (alongZ.isWall()) {
             velocity = velocity.withZ(-velocity.z() * alongZ.restitution());
         } else {
@@ -106,7 +106,7 @@ public final class PhysicsEngine {
         }
 
         // 4. Sample the surface the ball is now rolling over.
-        Surface surface = groundSurface(position, sampler);
+        Surface surface = groundSurface(position, hole);
 
         // 5. Impulse pads and currents both add velocity before friction eats into it.
         if (surface.hasImpulse()) {
@@ -126,6 +126,18 @@ public final class PhysicsEngine {
         ball.setPosition(position);
         ball.setVelocity(velocity);
 
+        // Teleport pads. The cooldown is what stops a pair of pads facing each other from bouncing
+        // a ball between them forever: after arriving, the ball ignores pads until it has had a
+        // chance to roll clear of the one it landed on.
+        Teleport pad = ball.canTeleport()
+                ? hole.teleportAt(position.blockX(), (int) Math.floor(position.y() - 0.5), position.blockZ())
+                : null;
+        if (pad != null) {
+            ball.teleportTo(pad.destination(), pad.keepVelocity() ? velocity : Vec3.ZERO);
+            return new StepOutcome(pad.keepVelocity() ? StepResult.MOVING : StepResult.CAME_TO_REST,
+                    surface, 0, struck);
+        }
+
         // 10. Hazards win over resting and sinking - a ball that rolls into water is gone whatever
         // its speed, and the reset spot must be established before any rest bookkeeping runs.
         if (surface.isHazard()) {
@@ -137,9 +149,9 @@ public final class PhysicsEngine {
         // 11. Sink gate. Being over the cup is not enough: too fast and the ball lips out and rolls
         // on, which is what makes a sunk putt feel earned rather than magnetic.
         double speed = velocity.length();
-        if (position.horizontalDistance(cup) <= config.sinkRadius()) {
+        if (position.horizontalDistance(hole.cup()) <= config.sinkRadius()) {
             if (speed <= config.maxSinkSpeed()) {
-                ball.placeAt(cup);
+                ball.placeAt(hole.cup());
                 return new StepOutcome(StepResult.SUNK, surface, 0, struck);
             }
             return new StepOutcome(StepResult.MOVING, surface, 0, struck);
@@ -185,7 +197,7 @@ public final class PhysicsEngine {
         return root >= 0.0 && root <= 1.0 ? root : null;
     }
 
-    private Surface groundSurface(Vec3 position, SurfaceSampler sampler) {
-        return sampler.at(position.blockX(), (int) Math.floor(position.y() - 0.5), position.blockZ());
+    private Surface groundSurface(Vec3 position, HoleContext hole) {
+        return hole.surfaceAt(position.blockX(), (int) Math.floor(position.y() - 0.5), position.blockZ());
     }
 }

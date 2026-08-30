@@ -1,8 +1,13 @@
 package com.redcoffee.puttputt.course;
 
+import com.redcoffee.puttputt.game.Teleport;
+import com.redcoffee.puttputt.game.TeleportLookup;
 import com.redcoffee.puttputt.util.Bounds;
 import com.redcoffee.puttputt.util.Vec3;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,6 +22,8 @@ public final class Hole {
     private Vec3 cup;
     private Bounds bounds;
     private final Map<String, String> materialOverrides = new HashMap<>();
+    /** Pads keyed by the block cell you roll onto. */
+    private final Map<String, Teleport> teleports = new LinkedHashMap<>();
 
     public Hole(int number) {
         this.number = number;
@@ -60,6 +67,39 @@ public final class Hole {
 
     public Map<String, String> materialOverrides() {
         return materialOverrides;
+    }
+
+    /** Adds a pad: rolling onto {@code from} moves the ball to {@code to}. */
+    public void addTeleport(int fromX, int fromY, int fromZ, Vec3 to, boolean keepVelocity) {
+        teleports.put(key(fromX, fromY, fromZ), new Teleport(to, keepVelocity));
+    }
+
+    public void clearTeleports() {
+        teleports.clear();
+    }
+
+    public int teleportCount() {
+        return teleports.size();
+    }
+
+    /** Pads as (cell, teleport) pairs, for serialisation. */
+    public List<Map.Entry<int[], Teleport>> teleportEntries() {
+        List<Map.Entry<int[], Teleport>> out = new ArrayList<>();
+        teleports.forEach((cell, teleport) -> {
+            String[] parts = cell.split(",");
+            out.add(Map.entry(new int[]{
+                    Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2])},
+                    teleport));
+        });
+        return out;
+    }
+
+    public TeleportLookup teleportLookup() {
+        return teleports.isEmpty() ? TeleportLookup.NONE : (x, y, z) -> teleports.get(key(x, y, z));
+    }
+
+    private static String key(int x, int y, int z) {
+        return x + "," + y + "," + z;
     }
 
     /** A hole is only playable once it has both ends and an area to play them in. */
