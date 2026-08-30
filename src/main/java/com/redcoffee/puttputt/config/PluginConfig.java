@@ -24,6 +24,8 @@ public final class PluginConfig {
     private final Messages messages = new Messages();
     private ItemDefinition ballItem = new ItemDefinition("SNOWBALL", null, null, "<white>Golf Ball</white>");
     private ItemDefinition putterItem = new ItemDefinition("IRON_SHOVEL", null, null, "<gold>Putter</gold>");
+    private ItemDefinition wandItem =
+            new ItemDefinition("BLAZE_ROD", null, null, "<light_purple>Course Wand</light_purple>");
     private BallCollisionConfig ballCollision = BallCollisionConfig.DEFAULTS;
     private TurnConfig turns = TurnConfig.DEFAULTS;
     private PowerMeterConfig powerMeter = PowerMeterConfig.DEFAULTS;
@@ -47,6 +49,8 @@ public final class PluginConfig {
         turns = readTurns(config);
         powerMeter = readPowerMeter(config.getConfigurationSection("power-meter"));
         snapshots = readSnapshots(config.getConfigurationSection("snapshot"));
+        wandItem = ItemDefinition.read(config.getConfigurationSection("items.wand"),
+                "BLAZE_ROD", "<light_purple>Course Wand</light_purple>");
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
         outOfBoundsPenalty = Math.max(0, config.getInt("out_of_bounds.penalty", 1));
@@ -247,6 +251,10 @@ public final class PluginConfig {
 
     public ItemDefinition putterItem() {
         return putterItem;
+    }
+
+    public ItemDefinition wandItem() {
+        return wandItem;
     }
 
     public boolean economyEnabled() {

@@ -68,6 +68,7 @@ surfaces:
 # Block material -> surface id. Per-course overrides live in the course file and win over this map.
 # Anything unmapped rolls like plain green.
 material_map:
+  GREEN_TERRACOTTA: green
   GREEN_CONCRETE: green
   SAND: sand
   BLUE_ICE: ice
@@ -135,6 +136,11 @@ items:
     material: IRON_SHOVEL
     name: '<gold>Putter</gold>'
     custom_model_data: 1002.0
+  wand:
+    # Course-builder wand: /puttputt admin wand
+    material: BLAZE_ROD
+    name: '<light_purple>Course Wand</light_purple>'
+    custom_model_data: 1003.0
 
 messages:
   prefix: '<dark_green>[<green>PuttPutt</green>]</dark_green> '
@@ -186,6 +192,14 @@ messages:
     row: '<gray><white><rank>.</white> <player> <dark_gray>|</dark_gray> <white><strokes></white> (<diff>)</gray>'
     empty: '<gray>Nobody has finished <course> yet.</gray>'
     error: '<red>Could not read the leaderboard.</red>'
+  wand:
+    given: '<green>Course wand given.</green> <gray>Left/right-click blocks for corners, <white>sneak</white>+left/right for tee/cup. Editing hole <white><hole></white>.</gray>'
+    hole-selected: '<green>Wand now edits hole <white><hole></white>.</green>'
+    corner: '<green>Corner <corner></green> <gray>at <x>, <y>, <z>. Both set: <white><ready></white></gray>'
+    tee: '<green>Tee for hole <white><hole></white></green> <gray>set to <x>, <y>, <z>.</gray>'
+    cup: '<green>Cup for hole <white><hole></white></green> <gray>set to <x>, <y>, <z>.</gray>'
+    wrong-world: '<red>That course lives in world <world>.</red>'
+    no-permission: '<red>You do not have permission to build courses.</red>'
   admin:
     course-created: '<green>Created course <white><course></white> in world <white><world></white>.</green>'
     course-exists: '<red>Course <course> already exists.</red>'
