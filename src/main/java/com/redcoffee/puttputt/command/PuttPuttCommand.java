@@ -95,7 +95,7 @@ public final class PuttPuttCommand {
             Player member = plugin.getServer().getPlayer(memberId);
             if (member != null) {
                 plugin.messages().send(member, "round.started",
-                        "course", course.displayName(),
+                        "course", course.displayComponent(),
                         "holes", String.valueOf(course.holeCount()),
                         "par", String.valueOf(course.totalPar()));
             }
@@ -145,7 +145,7 @@ public final class PuttPuttCommand {
             return 0;
         }
         Scorecard card = round.scorecard(player.getUniqueId());
-        plugin.messages().send(player, "scorecard.header", "course", round.course().displayName());
+        plugin.messages().send(player, "scorecard.header", "course", round.course().displayComponent());
         for (Hole hole : round.course().holes()) {
             Integer strokes = card.strokesFor(hole.number());
             String value = strokes != null
@@ -173,7 +173,7 @@ public final class PuttPuttCommand {
         for (Course course : playable) {
             sender.sendMessage(plugin.messages().render("course.list-row",
                     "id", course.id(),
-                    "display", course.displayName(),
+                    "display", course.displayComponent(),
                     "holes", String.valueOf(course.holeCount()),
                     "par", String.valueOf(course.totalPar())));
         }
@@ -194,11 +194,11 @@ public final class PuttPuttCommand {
                 entries -> {
                     if (entries.isEmpty()) {
                         sender.sendMessage(plugin.messages().prefixed("leaderboard.empty",
-                                "course", course.displayName()));
+                                "course", course.displayComponent()));
                         return;
                     }
                     sender.sendMessage(plugin.messages().prefixed("leaderboard.header",
-                            "course", course.displayName()));
+                            "course", course.displayComponent()));
                     int rank = 1;
                     for (LeaderboardEntry entry : entries) {
                         sender.sendMessage(plugin.messages().render("leaderboard.row",

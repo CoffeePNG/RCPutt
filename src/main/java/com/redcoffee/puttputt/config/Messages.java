@@ -64,8 +64,12 @@ public final class Messages {
     }
 
     /**
-     * Builds placeholder resolvers from alternating name/value pairs. Values are inserted as
-     * literal text, never parsed, so a player name can never smuggle MiniMessage tags into a
+     * Builds placeholder resolvers from alternating name/value pairs.
+     *
+     * <p>A {@link Component} value is inserted as-is; anything else is inserted as literal text and
+     * never parsed. That split is the security boundary: config- and course-authored text (a course
+     * display name, say) is deliberately rendered as MiniMessage by the caller and passed in
+     * already-parsed, while untrusted strings like player names cannot smuggle tags into a
      * broadcast.
      */
     private static TagResolver resolver(Object... placeholders) {
@@ -75,12 +79,14 @@ public final class Messages {
         if (placeholders.length % 2 != 0) {
             throw new IllegalArgumentException("Placeholders must be name/value pairs, got " + placeholders.length);
         }
-        Map<String, String> pairs = new LinkedHashMap<>();
+        Map<String, Object> pairs = new LinkedHashMap<>();
         for (int i = 0; i < placeholders.length; i += 2) {
-            pairs.put(String.valueOf(placeholders[i]), String.valueOf(placeholders[i + 1]));
+            pairs.put(String.valueOf(placeholders[i]), placeholders[i + 1]);
         }
         TagResolver.Builder builder = TagResolver.builder();
-        pairs.forEach((name, value) -> builder.resolver(Placeholder.unparsed(name, value)));
+        pairs.forEach((name, value) -> builder.resolver(value instanceof Component component
+                ? Placeholder.component(name, component)
+                : Placeholder.unparsed(name, String.valueOf(value))));
         return builder.build();
     }
 }

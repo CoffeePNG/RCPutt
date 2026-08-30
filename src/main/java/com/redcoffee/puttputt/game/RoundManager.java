@@ -350,7 +350,7 @@ public final class RoundManager {
         for (UUID playerId : round.players()) {
             Player player = plugin.getServer().getPlayer(playerId);
             if (player != null) {
-                plugin.messages().send(player, "round.complete", "course", round.course().displayName());
+                plugin.messages().send(player, "round.complete", "course", round.course().displayComponent());
             }
             removeFromRound(round, playerId);
         }
