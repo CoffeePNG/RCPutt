@@ -13,7 +13,6 @@ physics:
   # Blocks from the cup centre that count as "over the cup".
   sink_radius: 0.35
   # Velocity of a fully drawn putt. Clamped to max_velocity.
-  max_putt_power: 0.9
 
 surfaces:
   green:
@@ -51,6 +50,20 @@ surfaces:
       strength: 0.35
   cup:
     type: hole
+  # Rivers: a wide, sustained flow. preventRest keeps the ball drifting instead of parking
+  # mid-stream - it only settles once it leaves the current.
+  river_east:
+    type: current
+    current:
+      direction: [1, 0, 0]
+      strength: 0.12
+    preventRest: true
+  river_north:
+    type: current
+    current:
+      direction: [0, 0, -1]
+      strength: 0.12
+    preventRest: true
 
 # Block material -> surface id. Per-course overrides live in the course file and win over this map.
 # Anything unmapped rolls like plain green.
@@ -62,6 +75,42 @@ material_map:
   WATER: water
   LIGHT_BLUE_CONCRETE: booster_north
   ORANGE_CONCRETE: booster_east
+  CYAN_CONCRETE: river_east
+  LIGHT_GRAY_CONCRETE: river_north
+
+# Ball-to-ball collision. Affordable because play is turn-based: only one ball is ever under power,
+# so a strike resolves against resting balls rather than an n-body simulation.
+ball-collision:
+  enabled: true
+  restitution: 0.85       # fraction of normal velocity handed to the struck ball
+  radius: 0.18            # ball radius in blocks; contact happens at twice this
+  allow-knock-in: true    # false = purists; a knocked-in ball is put back instead of counting
+
+turn-order:
+  # ascending  = lowest total putts FIRST. This is a deliberate penalty: the leader reads the green
+  #              for everyone with no information of their own, which keeps rounds close.
+  # descending = reward the leader instead.
+  mode: ascending
+
+shot-clock:
+  seconds: 30
+  timeout-penalty: 1
+  max-consecutive-timeouts: 3   # after this many forfeits in a row, the player is capped out
+
+# Hard cap so one player cannot stall a hole forever.
+max-strokes-per-hole: 10
+
+power-meter:
+  # oscillate = bar sweeps 0 -> 100 -> 0 while held; release locks it in (timing skill).
+  # fill      = bar rises to full and holds; release fires at the current value.
+  mode: oscillate
+  sweep-ticks: 30         # ticks for one 0 -> 100 pass
+  min-velocity: 0.08
+  max-velocity: 0.9       # clamped to physics.max_velocity
+
+snapshot:
+  interval-seconds: 15
+  resume-window-minutes: 10
 
 out_of_bounds:
   # Strokes added when a ball leaves the hole's bounds.
@@ -82,7 +131,8 @@ items:
     # reliably but ignore item_model overrides.
     custom_model_data: 1001.0
   putter:
-    material: BOW
+    # A shovel, not a bow: the plugin owns the charge curve via the boss bar power meter.
+    material: IRON_SHOVEL
     name: '<gold>Putter</gold>'
     custom_model_data: 1002.0
 
@@ -94,14 +144,26 @@ messages:
     no-round: '<red>You are not in a round. Try /puttputt start <course>.</red>'
     cannot-drop: '<red>You cannot drop your putter mid-round.</red>'
     sunk: '<green><result>!</green> <gray>Hole <white><hole></white> in <white><strokes></white> (par <par>).</gray>'
+    knocked-in: '<green>Knocked in!</green> <gray>Someone put you in the cup on hole <white><hole></white> for <white><strokes></white>.</gray>'
     hazard: '<red>In the <surface>!</red> <gray>+<penalty> stroke(s).</gray>'
     out-of-bounds: '<red>Out of bounds!</red> <gray>+<penalty> stroke(s).</gray>'
+  power:
+    title: '<yellow><player>''s power: <white><percent>%</white></yellow>'
+  turn:
+    yours: '<green>Your turn!</green> <gray>Hold right-click to charge. <white><seconds>s</white> on the clock.</gray>'
+    other: '<gray>Waiting on <white><player></white>...</gray>'
+    not-yours: '<red>It is not your turn.</red>'
+    order: '<gray>Order this hole: <white><order></white></gray>'
+    clock: '<red><seconds></red><gray>s left</gray>'
+    timeout: '<red>Out of time!</red> <gray>+<penalty> stroke(s).</gray>'
+    capped: '<red>Maximum <strokes> strokes on this hole.</red>'
   round:
     started: '<green>Round started on <white><display></white></green> <gray>- <holes> holes, par <par>.</gray>'
     hole-start: '<yellow>Hole <white><hole></white>, par <white><par></white>.</yellow>'
     player-finished: '<green>Round finished!</green> <gray><strokes> strokes (<diff>).</gray>'
     complete: '<green>Your round on <white><course></white> is over.</green>'
     left: '<gray>You left the round.</gray>'
+    resumed: '<green>Resumed your round on <white><course></white></green> <gray>at hole <white><hole></white>.</gray>'
     not-playing: '<red>You are not in a round.</red>'
     already-playing: '<red>You are already in a round.</red>'
     not-leader: '<red>Only the party leader can do that.</red>'

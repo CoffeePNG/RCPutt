@@ -1,9 +1,10 @@
 # RCPuttPutt
 
-Playable putt-putt (mini-golf) for Purpur: rolling-ball physics, a config-driven surface registry,
-party-based rounds, scorecards and per-course leaderboards.
+Turn-based putt-putt (mini-golf) for Purpur: rolling-ball physics, a config-driven surface registry,
+ball-to-ball collision, a shot clock, leader-punishing turn order, party rounds, scorecards and
+per-course leaderboards.
 
-Implements **RC-SPEC-PUTTPUTT-001**, built to **RC-DEV-STD-001**.
+Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 
 - **Target:** Paper/Purpur 1.21.11 / Java 21
 - **Depends on:** RCParties (hard), Vault (soft — economy is a stubbed seam in v1)
@@ -27,12 +28,28 @@ under `libraries:` and Paper resolves it at load time.
 
 ## How it plays
 
-The putter is a bow. Face where you want the ball to go, draw to set power, release to putt. The
-draw force arrives as 0–1 from `EntityShootBowEvent` and scales straight into launch velocity — no
-custom input handling, no charge bar to learn.
+**One ball is struck at a time.** You can walk the course freely, but you can only putt on your
+turn. When it comes round you are teleported to your ball facing the cup, handed the putter, and
+put on a shot clock.
 
-The ball is an Item Display: no AI, no gravity to fight, and client-side interpolation between
-ticks, so a 20 tps roll looks smooth.
+The putter is a **shovel**. Hold right-click to charge — a **boss bar power meter** shown to the
+whole party sweeps 0→100→0 — and release to strike. A shovel has no vanilla use animation, so the
+putter carries a `consumable` component purely to make "still holding" observable; the plugin owns
+the charge curve outright, which is the point, because it is then fully tunable.
+
+The ball is an Item Display rendering a snowball: no AI, no gravity to fight, and client-side
+interpolation between ticks, so a 20 tps roll looks smooth.
+
+### Turn order punishes the leader
+
+Hole 1 is random. Every hole after that re-sorts **ascending by total strokes, so the player in the
+lead putts first** — reading the green for everyone else with no information of their own. That is
+deliberate: it hands trailing players a small edge and keeps rounds close. Set
+`turn-order.mode: descending` to reward the leader instead.
+
+A turn ends when the player strikes, or when the 30-second shot clock expires (forfeit, +1 stroke).
+Three forfeits in a row caps the player out on that hole so one AFK player cannot stall the round.
+No new turn begins until **every** ball has come to rest, so knock-ons fully resolve first.
 
 ## Physics
 
@@ -40,16 +57,19 @@ One synchronous task at 20 tps steps every ball in motion:
 
 1. Integrate `position + velocity`.
 2. Resolve walls one axis at a time, reflecting that axis and scaling by the wall's `restitution`.
-3. Sample the surface the ball rolls over.
-4. Add any `impulse` (push blocks / boosters).
-5. Apply the surface's `friction`.
-6. Clamp to `max_velocity`.
-7. Move the display with `interpolation_duration = 1`.
-8. Rest, hazard and sink checks.
+3. Ball-to-ball collision, swept along the path travelled (see below).
+4. Sample the surface, apply any `impulse` or `current`, then `friction`.
+5. Clamp to `max_velocity`, move the display, then rest / hazard / sink checks.
 
 **The tunneling guard is not optional.** `max_velocity` must stay below 1 block/tick — a ball that
 travels more than a block between samples can step straight over a 1-block wall and never register
 the collision. The config loader rejects anything ≥ 1.0 and falls back to defaults.
+
+**Ball-ball collision is swept, not endpoint-tested.** At putting speeds a ball covers more ground
+in one tick than the contact zone is wide, so checking only where it *ended up* lets it pass clean
+through a resting ball — the same tunneling failure the wall guard exists to prevent. The engine
+solves for the earliest point along the tick's travel at which the two come into contact. Collision
+is affordable at all only because play is turn-based: at most one ball is ever under power.
 
 **The sink gate is what makes a putt feel earned.** Being within `sink_radius` of the cup is not
 enough; a ball moving faster than `max_sink_speed` lips out and rolls on.
@@ -79,21 +99,35 @@ material_map:
   LIGHT_BLUE_CONCRETE: booster_north
 ```
 
-Types: `roll` (default), `wall`, `hazard`, `impulse`, `hole`. Per-course overrides live in the
-course file and win over the global map; anything unmapped rolls like plain green.
+Types: `roll` (default), `wall`, `hazard`, `impulse`, `current`, `hole`. Per-course overrides live
+in the course file and win over the global map; anything unmapped rolls like plain green.
+
+A **river** is a `current`: a wide, sustained push paired with `preventRest: true`, which skips both
+friction and the rest check so the ball drifts downstream instead of parking mid-water. It only
+settles once it leaves the current.
 
 Collision assumes axis-aligned (or 45°) walls. That is a course-builder rule, not an accident —
 it is what keeps the block-based sweep both cheap and correct.
 
 ## Rounds
 
-A round is one party playing one course. Solo is a party of one; nothing else special-cases it.
-Starting a round takes an RCParties **activity lock** so members cannot leave or disband out from
-under it, and the lock is released on close.
+A round is one party playing one course, everyone on the same hole, taking turns. Solo is a party of
+one; nothing else special-cases it. Starting a round takes an RCParties **activity lock** so members
+cannot leave or disband out from under it, and the lock is released on close.
 
-Several parties can share a course. Balls are keyed to `(roundId, player)` and only ever interact
-with course geometry — **ball-to-ball collision is off**, which is what keeps simultaneous play
-sane rather than a support queue.
+A hole ends when every player has sunk or hit `max-strokes-per-hole` (default 10). A ball knocked
+into the cup by someone else counts as sunk for its owner — set `ball-collision.allow-knock-in: false`
+for purists.
+
+Several parties can share a course. Balls are keyed to `(roundId, player)`, and collision is
+**intra-round only** — balls never interact across rounds.
+
+### Crash resilience
+
+Live rounds snapshot to SQLite every 15s and on clean shutdown. On startup a round is resumed only
+if **every** original member is back online inside the resume window (default 10 minutes) —
+a half-restored round with missing players creates more edge cases than it solves. Anything else is
+archived. Parties themselves are not persisted.
 
 ## Commands
 
@@ -144,7 +178,8 @@ names for offline players, and resolving UUIDs at read time would mean a blockin
 
 ## Resource pack
 
-The ball and putter models are selected with `custom_model_data`, **not** `item_model` overrides:
+The ball (snowball) and putter (shovel) models are selected with `custom_model_data`, **not**
+`item_model` overrides:
 LabyMod and some other clients render `custom_model_data` reliably but ignore `item_model` (the
 same finding that drove WeaponMechanics and RCPhone). Pack assets for both are a build dependency —
 flag them to whoever owns the pack pipeline. Without them, the items still work; they just render
@@ -159,7 +194,10 @@ as a plain snowball and bow.
   totals and par diffs for a future wager layer to settle against. Unfinished scorecards are absent
   from it: an abandoned round is not a result anyone should be paid on. No betting logic lives here.
 
-## Not in v1
+## Not in v2
 
-Slopes and ramps, moving obstacles, ball-to-ball collision, tournaments and betting,
-disconnect-grace round resumption, spectator mode, per-surface particles and SFX.
+Slopes and ramps, moving obstacles, tournaments and betting, spectator mode, per-surface particles
+and SFX.
+
+Turn-based play costs throughput by design — **build shorter courses.** Six holes for a party of
+four is a very different length of session from eighteen.

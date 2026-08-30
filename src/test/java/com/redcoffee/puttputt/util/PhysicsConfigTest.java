@@ -12,16 +12,9 @@ class PhysicsConfigTest {
     @Test
     void rejectsAMaxVelocityThatWouldLetBallsTunnel() {
         assertThrows(IllegalArgumentException.class,
-                () -> new PhysicsConfig(1.0, 0.02, 0.25, 0.35, 0.9));
+                () -> new PhysicsConfig(1.0, 0.02, 0.25, 0.35));
         assertThrows(IllegalArgumentException.class,
-                () -> new PhysicsConfig(2.5, 0.02, 0.25, 0.35, 0.9));
-    }
-
-    @Test
-    void puttPowerCannotExceedTheTunnelingGuard() {
-        PhysicsConfig config = new PhysicsConfig(0.5, 0.02, 0.25, 0.35, 5.0);
-
-        assertEquals(0.5, config.maxPuttPower(), 1.0e-9);
+                () -> new PhysicsConfig(2.5, 0.02, 0.25, 0.35));
     }
 
     @Test

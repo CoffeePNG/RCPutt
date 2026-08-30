@@ -10,8 +10,14 @@ public enum SurfaceType {
     WALL,
     /** Costs strokes and resets the ball. */
     HAZARD,
-    /** Adds a fixed impulse each tick the ball rolls over it. */
+    /** Adds a fixed impulse each tick the ball rolls over it (push block / booster pad). */
     IMPULSE,
+    /**
+     * A sustained flow - a river. Like {@link #IMPULSE} but usually weaker and spread over a wide
+     * area, and normally paired with {@code preventRest} so the ball drifts on instead of settling
+     * mid-stream.
+     */
+    CURRENT,
     /** The cup. Sinking is gated on speed, not just proximity. */
     HOLE;
 
@@ -23,6 +29,7 @@ public enum SurfaceType {
             case "wall" -> WALL;
             case "hazard", "water", "oob" -> HAZARD;
             case "impulse", "booster", "push" -> IMPULSE;
+            case "current", "river", "flow" -> CURRENT;
             case "hole", "cup" -> HOLE;
             default -> ROLL;
         };

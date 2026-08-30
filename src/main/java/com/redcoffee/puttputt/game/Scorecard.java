@@ -7,42 +7,44 @@ import java.util.Map;
 public final class Scorecard {
 
     private final Map<Integer, Integer> strokesByHole = new LinkedHashMap<>();
-    private int currentHole;
     private int currentStrokes;
-    private boolean finished;
-
-    public Scorecard(int firstHole) {
-        this.currentHole = firstHole;
-    }
-
-    public int currentHole() {
-        return currentHole;
-    }
+    private int consecutiveTimeouts;
+    private boolean finishedRound;
 
     public int currentStrokes() {
         return currentStrokes;
-    }
-
-    public boolean finished() {
-        return finished;
     }
 
     public void addStrokes(int count) {
         currentStrokes += count;
     }
 
-    /** Banks the current hole and moves on. */
-    public void completeHole(int nextHole) {
-        strokesByHole.put(currentHole, currentStrokes);
-        currentStrokes = 0;
-        currentHole = nextHole;
+    public int consecutiveTimeouts() {
+        return consecutiveTimeouts;
     }
 
-    /** Banks the final hole; no hole follows. */
-    public void finish() {
-        strokesByHole.put(currentHole, currentStrokes);
+    public void recordTimeout() {
+        consecutiveTimeouts++;
+    }
+
+    /** Any completed putt clears the AFK counter - only unbroken timeouts should cap a hole. */
+    public void clearTimeouts() {
+        consecutiveTimeouts = 0;
+    }
+
+    /** Banks the hole just played. */
+    public void completeHole(int holeNumber) {
+        strokesByHole.put(holeNumber, currentStrokes);
         currentStrokes = 0;
-        finished = true;
+        consecutiveTimeouts = 0;
+    }
+
+    public void finishRound() {
+        finishedRound = true;
+    }
+
+    public boolean finishedRound() {
+        return finishedRound;
     }
 
     public Map<Integer, Integer> strokesByHole() {
@@ -54,7 +56,24 @@ public final class Scorecard {
         return strokesByHole.values().stream().mapToInt(Integer::intValue).sum();
     }
 
+    /**
+     * Total including the hole in progress. This is what turn order sorts on: using banked-only
+     * totals would let a player who has already taken six shots on the current hole still be
+     * treated as the leader.
+     */
+    public int runningTotal() {
+        return totalStrokes() + currentStrokes;
+    }
+
     public Integer strokesFor(int hole) {
         return strokesByHole.get(hole);
+    }
+
+    /** Restores a card from a snapshot. */
+    public void restore(Map<Integer, Integer> holes, int currentStrokes, int consecutiveTimeouts) {
+        strokesByHole.clear();
+        strokesByHole.putAll(holes);
+        this.currentStrokes = currentStrokes;
+        this.consecutiveTimeouts = consecutiveTimeouts;
     }
 }

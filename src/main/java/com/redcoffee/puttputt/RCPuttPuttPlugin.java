@@ -5,7 +5,9 @@ import com.redcoffee.puttputt.config.Messages;
 import com.redcoffee.puttputt.config.PluginConfig;
 import com.redcoffee.puttputt.course.CourseManager;
 import com.redcoffee.puttputt.game.PhysicsEngine;
+import com.redcoffee.puttputt.game.Round;
 import com.redcoffee.puttputt.game.RoundManager;
+import com.redcoffee.puttputt.snapshot.RoundSnapshot;
 import com.redcoffee.puttputt.input.PuttListener;
 import com.redcoffee.puttputt.item.PuttItems;
 import com.redcoffee.puttputt.party.PartyProvider;
@@ -52,7 +54,7 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         getLogger().info("Party backend: " + parties.name());
 
         items = new PuttItems(this);
-        rounds = new RoundManager(this, new PhysicsEngine(config.physics()), items);
+        rounds = new RoundManager(this, new PhysicsEngine(config.physics(), config.ballCollision()), items);
         rounds.start();
 
         getServer().getPluginManager().registerEvents(new PuttListener(this), this);
@@ -60,6 +62,49 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         PuttPuttCommand commands = new PuttPuttCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
                 event.registrar().register(commands.build(), "Play putt-putt.", java.util.List.of("pp", "golf")));
+
+        // Deferred a tick so worlds and other plugins are fully up before we rebuild rounds.
+        getServer().getScheduler().runTaskLater(this, this::restoreRounds, 20L);
+    }
+
+    /**
+     * Rebuilds rounds that were live when the server stopped (RC-SPEC v2 s9).
+     *
+     * <p>A round is only resumed once every one of its original members is back online inside the
+     * resume window - a half-restored round with missing players creates more edge cases than it
+     * solves. Anything else is archived so it stops being offered.
+     */
+    private void restoreRounds() {
+        long cutoff = System.currentTimeMillis() - config.snapshots().resumeWindowMillis();
+        queryStorage(dao -> dao.resumableRounds(cutoff), resumable -> {
+            for (var row : resumable) {
+                var snapshot = RoundSnapshot.fromJson(row.snapshotJson());
+                var members = RoundSnapshot.decodeMembers(row.partyJson());
+                var course = courses.course(row.courseId()).orElse(null);
+                boolean everyoneBack = !members.isEmpty() && members.stream()
+                        .allMatch(id -> getServer().getPlayer(id) != null);
+                if (snapshot == null || course == null || !everyoneBack) {
+                    runStorage(dao -> {
+                        dao.archiveRound(row.roundId());
+                        dao.clearSnapshot(row.roundId());
+                    });
+                    continue;
+                }
+                Round round = new Round(row.roundId(), course, members.getFirst(), members, System.currentTimeMillis());
+                rounds.resume(round, snapshot, members);
+                getLogger().info("Resumed round " + row.roundId() + " on " + course.id() + ".");
+            }
+        }, error -> getLogger().warning("Could not check for resumable rounds: " + error.getMessage()));
+    }
+
+    /** Best-effort display name for a player id, online or not. */
+    public String nameOf(java.util.UUID playerId) {
+        var online = getServer().getPlayer(playerId);
+        if (online != null) {
+            return online.getName();
+        }
+        String offline = getServer().getOfflinePlayer(playerId).getName();
+        return offline != null ? offline : playerId.toString();
     }
 
     @Override

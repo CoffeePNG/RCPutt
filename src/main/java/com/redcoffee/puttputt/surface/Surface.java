@@ -11,11 +11,12 @@ public record Surface(
         double restitution,
         int penalty,
         ResetMode reset,
-        Impulse impulse) {
+        Impulse impulse,
+        boolean preventRest) {
 
     /** Used when a block has no registry entry at all - behaves like plain green. */
     public static Surface fallback(String id, double friction) {
-        return new Surface(id, SurfaceType.ROLL, friction, 0.0, 0, ResetMode.LAST_REST, null);
+        return new Surface(id, SurfaceType.ROLL, friction, 0.0, 0, ResetMode.LAST_REST, null, false);
     }
 
     public boolean isWall() {
@@ -32,5 +33,17 @@ public record Surface(
 
     public boolean hasImpulse() {
         return impulse != null && impulse.strength() != 0.0;
+    }
+
+    public boolean isCurrent() {
+        return type == SurfaceType.CURRENT;
+    }
+
+    /**
+     * True while the ball must keep drifting rather than settle. Friction and the rest check are
+     * both skipped here, which is what stops a ball parking in the middle of a river.
+     */
+    public boolean preventsRest() {
+        return preventRest;
     }
 }
