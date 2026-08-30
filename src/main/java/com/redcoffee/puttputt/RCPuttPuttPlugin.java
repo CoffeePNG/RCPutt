@@ -1,0 +1,153 @@
+package com.redcoffee.puttputt;
+
+import com.redcoffee.puttputt.command.PuttPuttCommand;
+import com.redcoffee.puttputt.config.Messages;
+import com.redcoffee.puttputt.config.PluginConfig;
+import com.redcoffee.puttputt.course.CourseManager;
+import com.redcoffee.puttputt.game.PhysicsEngine;
+import com.redcoffee.puttputt.game.RoundManager;
+import com.redcoffee.puttputt.input.PuttListener;
+import com.redcoffee.puttputt.item.PuttItems;
+import com.redcoffee.puttputt.party.PartyProvider;
+import com.redcoffee.puttputt.party.RCPartiesProvider;
+import com.redcoffee.puttputt.party.SoloPartyProvider;
+import com.redcoffee.puttputt.storage.ScoreDao;
+import com.redcoffee.puttputt.storage.SqliteScoreDao;
+import com.redcoffee.puttputt.storage.StorageException;
+import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import java.io.File;
+import java.util.function.Consumer;
+import java.util.logging.Level;
+import org.bukkit.plugin.java.JavaPlugin;
+
+/** Plugin entry point: wires the config, storage, party seam, physics loop and commands together. */
+@SuppressWarnings("UnstableApiUsage")
+public final class RCPuttPuttPlugin extends JavaPlugin {
+
+    private final PluginConfig config = new PluginConfig(getLogger());
+    private CourseManager courses;
+    private RoundManager rounds;
+    private PuttItems items;
+    private PartyProvider parties;
+    private ScoreDao scoreDao;
+
+    @Override
+    public void onEnable() {
+        saveDefaultConfig();
+        config.load(getConfig());
+
+        courses = new CourseManager(new File(getDataFolder(), "courses"), getLogger());
+        courses.loadAll();
+
+        scoreDao = new SqliteScoreDao(new File(getDataFolder(), "scores.db"));
+        try {
+            scoreDao.initialise();
+        } catch (StorageException ex) {
+            // Play is still possible without persistence; losing the leaderboard beats losing the plugin.
+            getLogger().log(Level.SEVERE, "Score storage is unavailable; rounds will not be recorded.", ex);
+            scoreDao = null;
+        }
+
+        parties = RCPartiesProvider.bind(getLogger()).orElseGet(SoloPartyProvider::new);
+        getLogger().info("Party backend: " + parties.name());
+
+        items = new PuttItems(this);
+        rounds = new RoundManager(this, new PhysicsEngine(config.physics()), items);
+        rounds.start();
+
+        getServer().getPluginManager().registerEvents(new PuttListener(this), this);
+
+        PuttPuttCommand commands = new PuttPuttCommand(this);
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
+                event.registrar().register(commands.build(), "Play putt-putt.", java.util.List.of("pp", "golf")));
+    }
+
+    @Override
+    public void onDisable() {
+        if (rounds != null) {
+            rounds.shutdown();
+        }
+        if (scoreDao != null) {
+            scoreDao.close();
+        }
+    }
+
+    /** Re-reads config and courses. Live rounds keep the physics constants they started with. */
+    public void reloadEverything() {
+        reloadConfig();
+        config.load(getConfig());
+        courses.loadAll();
+    }
+
+    public PluginConfig config() {
+        return config;
+    }
+
+    public Messages messages() {
+        return config.messages();
+    }
+
+    public CourseManager courses() {
+        return courses;
+    }
+
+    public RoundManager rounds() {
+        return rounds;
+    }
+
+    public PuttItems items() {
+        return items;
+    }
+
+    public PartyProvider parties() {
+        return parties;
+    }
+
+    // ------------------------------------------------------------------ storage plumbing
+
+    /** A DAO call that returns nothing. */
+    @FunctionalInterface
+    public interface StorageAction {
+        void run(ScoreDao dao) throws StorageException;
+    }
+
+    /** A DAO call that returns a result. */
+    @FunctionalInterface
+    public interface StorageQuery<T> {
+        T run(ScoreDao dao) throws StorageException;
+    }
+
+    /** Runs a write off the main thread. Silently skipped when storage failed to initialise. */
+    public void runStorage(StorageAction action) {
+        if (scoreDao == null) {
+            return;
+        }
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                action.run(scoreDao);
+            } catch (StorageException ex) {
+                getLogger().log(Level.WARNING, "Score write failed", ex);
+            }
+        });
+    }
+
+    /**
+     * Runs a read off the main thread and hands the result back on the main thread, so callers can
+     * touch players and send messages from the success handler.
+     */
+    public <T> void queryStorage(StorageQuery<T> query, Consumer<T> onSuccess, Consumer<StorageException> onFailure) {
+        if (scoreDao == null) {
+            onFailure.accept(new StorageException("Score storage is unavailable", null));
+            return;
+        }
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                T result = query.run(scoreDao);
+                getServer().getScheduler().runTask(this, () -> onSuccess.accept(result));
+            } catch (StorageException ex) {
+                getLogger().log(Level.WARNING, "Score read failed", ex);
+                getServer().getScheduler().runTask(this, () -> onFailure.accept(ex));
+            }
+        });
+    }
+}
