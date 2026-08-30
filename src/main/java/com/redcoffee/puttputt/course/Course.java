@@ -27,6 +27,14 @@ public final class Course {
         return displayName == null || displayName.isBlank() ? id : displayName;
     }
 
+    /**
+     * The display name rendered as MiniMessage. The course file documents this field as
+     * MiniMessage, so it must be parsed rather than escaped when it reaches a message.
+     */
+    public net.kyori.adventure.text.Component displayComponent() {
+        return net.kyori.adventure.text.minimessage.MiniMessage.miniMessage().deserialize(displayName());
+    }
+
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
     }
