@@ -7,15 +7,18 @@ per-course leaderboards.
 Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 
 - **Target:** Paper/Purpur 1.21.11 / Java 21
-- **Depends on:** RCParties (hard), Vault (soft — economy is a stubbed seam in v1)
+- **Depends on:** RCParties (hard), Vault (soft — economy is a stubbed seam)
 
-> **This is the `legacy/1.21.11` branch.** The mainline targets Purpur 26.2 / Java 25; this branch
-> exists for servers still on 1.21.11. The two differ only in `pom.xml`, `plugin.yml`'s
+> **This is the `legacy/1.21.11` branch.** The mainline is `modern/26.2` (Purpur 26.2 / Java 25);
+> this branch exists for servers still on 1.21.11. The two differ only in `pom.xml`, `plugin.yml`'s
 > `api-version` and `build.sh` — **every line of Java is identical**, because each API the plugin
-> touches (`DataComponentTypes.CUSTOM_MODEL_DATA`, `ItemDisplay` interpolation, the Brigadier
-> lifecycle registrar, `ItemStack.editPersistentDataContainer`) has the same shape in both. Port
-> fixes across with `git cherry-pick`; if a change ever needs different code per version, that is
-> the signal to introduce a compatibility seam rather than let the branches drift.
+> touches has the same shape in both: `DataComponentTypes.CUSTOM_MODEL_DATA` and `CONSUMABLE`,
+> `ItemDisplay` interpolation, adventure `BossBar`, `Player.isHandRaised()`, the Brigadier lifecycle
+> registrar, and `ItemStack.editPersistentDataContainer`. Port changes across with `git cherry-pick`;
+> if one ever needs different code per version, that is the signal to introduce a compatibility seam
+> rather than let the branches drift.
+>
+> A 26.2 jar will **not** run here — 1.21.11 runs on Java 21 and rejects class file 69.
 
 ## Build
 
