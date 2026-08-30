@@ -8,11 +8,15 @@ import com.redcoffee.puttputt.util.Vec3;
  */
 public final class BallState {
 
+    /** Ticks a ball ignores pads for after using one. */
+    private static final int TELEPORT_COOLDOWN_TICKS = 20;
+
     private Vec3 position;
     private Vec3 velocity = Vec3.ZERO;
     private Vec3 lastRest;
     private Vec3 tee;
     private boolean atRest = true;
+    private int teleportCooldown;
 
     public BallState(Vec3 tee) {
         this.tee = tee;
@@ -56,6 +60,31 @@ public final class BallState {
         this.velocity = impulse;
         this.atRest = false;
         return true;
+    }
+
+    /** True while the ball is allowed to take a teleport pad. */
+    public boolean canTeleport() {
+        return teleportCooldown <= 0;
+    }
+
+    public void tickTeleportCooldown() {
+        if (teleportCooldown > 0) {
+            teleportCooldown--;
+        }
+    }
+
+    /**
+     * Moves the ball through a pad. The cooldown is generous enough to clear the destination pad
+     * even at low speed, so two pads pointing at each other cannot trap a ball.
+     */
+    public void teleportTo(Vec3 destination, Vec3 newVelocity) {
+        this.position = destination;
+        this.velocity = newVelocity;
+        this.teleportCooldown = TELEPORT_COOLDOWN_TICKS;
+        if (newVelocity.lengthSquared() == 0.0) {
+            this.atRest = true;
+            this.lastRest = destination;
+        }
     }
 
     /** Sets a resting ball moving because something hit it. Unlike a stroke, this is not a putt. */

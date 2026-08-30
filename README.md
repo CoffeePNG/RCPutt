@@ -100,6 +100,21 @@ A **river** is a `current`: a wide, sustained push paired with `preventRest: tru
 friction and the rest check so the ball drifts downstream instead of parking mid-water. It only
 settles once it leaves the current.
 
+### Teleport pads
+
+Pads are per-hole, so they live in the course file rather than the surface registry — a global
+surface has no way to know where to send a ball. Place one with the existing two-corner selection:
+
+```
+# corner 1 = the pad you roll onto, corner 2 = where the ball comes out
+/puttputt admin addtp          # ball keeps its speed and shoots out the far side
+/puttputt admin addtp stop     # ball arrives stopped
+/puttputt admin cleartp        # clears the selected hole's pads
+```
+
+A ball ignores pads for a second after using one, so two pads facing each other cannot trap it.
+Pads outside the hole's region are ignored like any other out-of-region block.
+
 Collision assumes axis-aligned (or 45°) walls. That is a course-builder rule, not an accident —
 it is what keeps the block-based sweep both cheap and correct.
 
@@ -183,8 +198,22 @@ ground layer. The wand cannot make that mistake.
 
 All admin commands need `rcputtputt.admin`. Edits live in memory until `save`.
 
-A ball that leaves a hole's bounds is treated as a hazard — outside the AABB the block-based
-collision model no longer holds, so it is reset with a penalty rather than allowed to roll off.
+### The bounds are the course, literally
+
+A hole's bounds are not just a leash — they are the **read window**. The physics can only consult
+blocks inside a hole's own region (plus one cell, so a perimeter wall standing on the boundary still
+bounces). Outside that, every cell reports as wall without the world being touched at all.
+
+Two consequences worth knowing:
+
+- **Blocks elsewhere on your server are completely inert.** Build with green terracotta, sand, water
+  or blue ice anywhere outside your courses; a ball can never reach or read them. There is no world
+  scan anywhere in the plugin — exactly one `getBlockAt`, called only underneath a rolling ball.
+- **You do not strictly need a physical perimeter wall.** The bounds behave as one. Real walls are
+  still better for looks and for shaping bank shots.
+
+Set `bounds.confine: false` to sample the world freely and fall back to the plain out-of-bounds
+reset (+1 stroke) instead.
 
 ## Storage
 
@@ -215,8 +244,13 @@ as a plain snowball and bow.
 
 ## Not in v2
 
-Slopes and ramps, moving obstacles, tournaments and betting, spectator mode, per-surface particles
-and SFX.
+Moving obstacles, tournaments and betting, spectator mode, per-surface particles and SFX.
+
+**Elevation.** The ball rolls on a single plane per hole: its Y comes from the tee and never
+changes. Multi-level greens and ramps therefore do not work yet — a hole must be flat. See the two
+options sketched in the spec discussion (stepped drops vs. true slopes); slopes are the spec's
+deferred item because they add a gravity component along the surface normal, which touches every
+part of the integrator.
 
 Turn-based play costs throughput by design — **build shorter courses.** Six holes for a party of
 four is a very different length of session from eighteen.

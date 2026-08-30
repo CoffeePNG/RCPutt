@@ -113,8 +113,17 @@ snapshot:
   interval-seconds: 15
   resume-window-minutes: 10
 
+bounds:
+  # true  = a hole's bounds are a hard boundary. Blocks outside the region read as wall, so a ball
+  #         physically cannot leave a course - and, more to the point, the physics can never read a
+  #         block that is not part of the hole. Terracotta, sand or water elsewhere on your server
+  #         is completely inert.
+  # false = sample the world freely and rely on the out-of-bounds reset below instead.
+  confine: true
+
 out_of_bounds:
-  # Strokes added when a ball leaves the hole's bounds.
+  # Strokes added when a ball leaves the hole's bounds. With bounds.confine on this is a safety net
+  # rather than the usual path.
   penalty: 1
 
 leaderboard:
@@ -217,6 +226,8 @@ messages:
     hole-deleted: '<green>Deleted hole <hole>.</green>'
     unknown-material: '<red>Unknown material <material>.</red>'
     unknown-surface: '<red>Unknown surface <surface>.</red>'
+    teleport-added: '<green>Teleport on hole <white><hole></white>:</green> <gray><from> -> <to> (<mode>).</gray>'
+    teleports-cleared: '<green>Cleared <white><count></white> teleport(s) on hole <white><hole></white>.</green>'
     surface-global: '<green>Mapped <material> to <surface> globally.</green>'
     surface-hole: '<green>Mapped <material> to <surface> on hole <hole>.</green>'
     saved: '<green>Courses saved.</green>'

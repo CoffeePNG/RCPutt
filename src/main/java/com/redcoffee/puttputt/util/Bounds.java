@@ -15,6 +15,19 @@ public record Bounds(int minX, int minY, int minZ, int maxX, int maxY, int maxZ)
                 && p.z() >= minZ && p.z() <= maxZ + 1;
     }
 
+    /**
+     * Block-cell containment, as opposed to {@link #contains(Vec3)} which tests a continuous
+     * position. This is what confines surface sampling to the hole's region.
+     */
+    public boolean containsBlock(int x, int y, int z) {
+        return x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ;
+    }
+
+    /** Grows the box outward, used to leave a sampling margin for perimeter walls. */
+    public Bounds expand(int by) {
+        return new Bounds(minX - by, minY - by, minZ - by, maxX + by, maxY + by, maxZ + by);
+    }
+
     public Vec3 center() {
         return new Vec3((minX + maxX + 1) / 2.0, (minY + maxY + 1) / 2.0, (minZ + maxZ + 1) / 2.0);
     }

@@ -344,9 +344,7 @@ public final class RoundManager {
             round.balls().values().forEach(ball -> ball.state().comeToRest());
             return;
         }
-        SurfaceSampler sampler = new WorldSurfaceSampler(
-                plugin.getServer().getWorld(round.course().world()),
-                plugin.config().surfaces(), hole.materialOverrides());
+        HoleContext context = contextFor(round, hole);
         List<BallState> all = round.ballStates();
 
         for (Map.Entry<UUID, Ball> entry : List.copyOf(round.balls().entrySet())) {
@@ -355,7 +353,7 @@ public final class RoundManager {
             if (ball.state().atRest() || round.hasFinishedThisHole(playerId)) {
                 continue;
             }
-            StepOutcome outcome = engine.step(ball.state(), sampler, hole.cup(), all);
+            StepOutcome outcome = engine.step(ball.state(), context, all);
             Player player = plugin.getServer().getPlayer(playerId);
 
             // Outside the hole's AABB the block-based collision model no longer holds, so treat it
@@ -480,6 +478,18 @@ public final class RoundManager {
     }
 
     // ------------------------------------------------------------------ helpers
+
+    /**
+     * Builds the read window for a hole: the world sampler, confined to the hole's own region so a
+     * ball can never read a block that is not part of the course.
+     */
+    private HoleContext contextFor(Round round, Hole hole) {
+        SurfaceSampler sampler = new WorldSurfaceSampler(
+                plugin.getServer().getWorld(round.course().world()),
+                plugin.config().surfaces(), hole.materialOverrides());
+        return new HoleContext(sampler, hole.cup(), hole.bounds(),
+                plugin.config().outsideBoundsSurface(), hole.teleportLookup());
+    }
 
     private void teleportTo(Player player, Vec3 target, Vec3 lookAt, World world) {
         Location location = new Location(world, target.x(), target.y(), target.z());

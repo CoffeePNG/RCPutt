@@ -55,6 +55,14 @@ public final class BuilderSession {
         this.corner2 = corner;
     }
 
+    public Vec3 corner1() {
+        return corner1;
+    }
+
+    public Vec3 corner2() {
+        return corner2;
+    }
+
     public boolean hasBothCorners() {
         return corner1 != null && corner2 != null;
     }

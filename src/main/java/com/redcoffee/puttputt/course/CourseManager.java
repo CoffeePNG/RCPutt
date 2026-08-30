@@ -117,6 +117,18 @@ public final class CourseManager {
                         "min", List.of(b.minX(), b.minY(), b.minZ()),
                         "max", List.of(b.maxX(), b.maxY(), b.maxZ())));
             }
+            if (hole.teleportCount() > 0) {
+                List<Map<String, Object>> pads = new ArrayList<>();
+                for (Map.Entry<int[], com.redcoffee.puttputt.game.Teleport> entry : hole.teleportEntries()) {
+                    int[] cell = entry.getKey();
+                    Vec3 to = entry.getValue().destination();
+                    pads.add(new java.util.LinkedHashMap<>(Map.of(
+                            "from", List.of(cell[0], cell[1], cell[2]),
+                            "to", Map.of("x", to.x(), "y", to.y(), "z", to.z()),
+                            "keep_velocity", entry.getValue().keepVelocity())));
+                }
+                node.put("teleports", pads);
+            }
             if (!hole.materialOverrides().isEmpty()) {
                 node.put("surface_overrides", Map.of("material_map", Map.copyOf(hole.materialOverrides())));
             }
@@ -145,8 +157,30 @@ public final class CourseManager {
             hole.setCup(mapToVec(raw.get("cup")));
             hole.setBounds(readBounds(raw.get("bounds")));
             readOverrides(raw.get("surface_overrides"), hole);
+            readTeleports(raw.get("teleports"), hole, id);
         }
         return course;
+    }
+
+    private void readTeleports(Object node, Hole hole, String courseId) {
+        if (!(node instanceof List<?> list)) {
+            return;
+        }
+        for (Object element : list) {
+            Map<?, ?> pad = asMap(element);
+            if (pad == null) {
+                continue;
+            }
+            int[] from = readTriple(pad.get("from"));
+            Vec3 to = mapToVec(pad.get("to"));
+            if (from == null || to == null) {
+                logger.warning("Course " + courseId + " hole " + hole.number()
+                        + " has a teleport with no valid from/to; skipping it.");
+                continue;
+            }
+            boolean keepVelocity = !(pad.get("keep_velocity") instanceof Boolean keep) || keep;
+            hole.addTeleport(from[0], from[1], from[2], to, keepVelocity);
+        }
     }
 
     private static void readOverrides(Object node, Hole hole) {

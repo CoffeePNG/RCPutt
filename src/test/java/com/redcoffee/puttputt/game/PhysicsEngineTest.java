@@ -12,6 +12,7 @@ import com.redcoffee.puttputt.surface.Impulse;
 import com.redcoffee.puttputt.surface.ResetMode;
 import com.redcoffee.puttputt.surface.Surface;
 import com.redcoffee.puttputt.surface.SurfaceType;
+import com.redcoffee.puttputt.util.Bounds;
 import com.redcoffee.puttputt.util.Vec3;
 import java.util.HashMap;
 import java.util.List;
@@ -73,6 +74,11 @@ class PhysicsEngineTest {
         }
     }
 
+    /** A context with bounds wide enough not to interfere, unless a test narrows them. */
+    private static HoleContext context(Grid grid, Vec3 cup) {
+        return new HoleContext(grid, cup, Bounds.of(-500, 0, -500, 500, 200, 500), WALL, TeleportLookup.NONE);
+    }
+
     private static BallState ballAt(double x, double z) {
         return new BallState(new Vec3(x, BALL_Y, z));
     }
@@ -80,7 +86,7 @@ class PhysicsEngineTest {
     private StepOutcome run(BallState ball, Grid grid, Vec3 cup, int maxTicks) {
         StepOutcome outcome = null;
         for (int tick = 0; tick < maxTicks && !ball.atRest(); tick++) {
-            outcome = engine.step(ball, grid, cup, List.of());
+            outcome = engine.step(ball, context(grid, cup), List.of());
             if (outcome.result() == StepResult.HAZARD || outcome.result() == StepResult.SUNK) {
                 return outcome;
             }
@@ -125,7 +131,7 @@ class PhysicsEngineTest {
         ball.strike(new Vec3(0.5, 0, 0.2));
         Grid grid = new Grid().put(101, WALL_Y, 200, WALL);
 
-        engine.step(ball, grid, FAR_AWAY, List.of());
+        engine.step(ball, context(grid, FAR_AWAY), List.of());
 
         assertTrue(ball.velocity().x() < 0, "the X component should have reversed");
         assertEquals(0.5 * 0.70 * GREEN.friction(), -ball.velocity().x(), 1.0e-9,
@@ -142,7 +148,7 @@ class PhysicsEngineTest {
         Grid grid = new Grid().fillGround(90, 200, 200, rocket);
 
         for (int tick = 0; tick < 100; tick++) {
-            engine.step(ball, grid, FAR_AWAY, List.of());
+            engine.step(ball, context(grid, FAR_AWAY), List.of());
             assertTrue(ball.velocity().length() <= PhysicsConfig.DEFAULTS.maxVelocity() + 1.0e-9,
                     "speed must stay under the tunneling guard, was " + ball.velocity().length());
         }
@@ -156,7 +162,7 @@ class PhysicsEngineTest {
         ball.strike(new Vec3(0.1, 0, 0));
         Grid grid = new Grid().put(100, GROUND_Y, 200, BOOSTER);
 
-        engine.step(ball, grid, FAR_AWAY, List.of());
+        engine.step(ball, context(grid, FAR_AWAY), List.of());
 
         assertTrue(ball.velocity().z() < 0, "the pad should have pushed the ball north");
     }
@@ -169,7 +175,7 @@ class PhysicsEngineTest {
         Grid grid = new Grid().fillGround(90, 140, 200, RIVER);
 
         for (int tick = 0; tick < 50; tick++) {
-            StepOutcome outcome = engine.step(ball, grid, FAR_AWAY, List.of());
+            StepOutcome outcome = engine.step(ball, context(grid, FAR_AWAY), List.of());
             assertNotEquals(StepResult.CAME_TO_REST, outcome.result(),
                     "a ball in a current must not settle mid-stream");
         }
@@ -198,7 +204,7 @@ class PhysicsEngineTest {
         ball.strike(new Vec3(0.5, 0, 0));
         Grid grid = new Grid().put(101, GROUND_Y, 200, WATER);
 
-        StepOutcome outcome = engine.step(ball, grid, FAR_AWAY, List.of());
+        StepOutcome outcome = engine.step(ball, context(grid, FAR_AWAY), List.of());
 
         assertEquals(StepResult.HAZARD, outcome.result());
         assertEquals(1, outcome.penaltyStrokes());
@@ -211,11 +217,11 @@ class PhysicsEngineTest {
         BallState ball = ballAt(100.5, 200.5);
         Vec3 tee = ball.tee();
         ball.strike(new Vec3(0.5, 0, 0));
-        engine.step(ball, new Grid(), FAR_AWAY, List.of());
+        engine.step(ball, context(new Grid(), FAR_AWAY), List.of());
         assertNotEquals(tee, ball.position());
 
         Grid grid = new Grid().fillGround(90, 140, 200, TEE_WATER);
-        StepOutcome outcome = engine.step(ball, grid, FAR_AWAY, List.of());
+        StepOutcome outcome = engine.step(ball, context(grid, FAR_AWAY), List.of());
 
         assertEquals(StepResult.HAZARD, outcome.result());
         assertEquals(2, outcome.penaltyStrokes());
@@ -230,7 +236,7 @@ class PhysicsEngineTest {
         ball.strike(new Vec3(0.1, 0, 0));
         Vec3 cup = new Vec3(100.6, BALL_Y, 200.5);
 
-        StepOutcome outcome = engine.step(ball, new Grid(), cup, List.of());
+        StepOutcome outcome = engine.step(ball, context(new Grid(), cup), List.of());
 
         assertEquals(StepResult.SUNK, outcome.result());
         assertEquals(cup, ball.position());
@@ -242,7 +248,7 @@ class PhysicsEngineTest {
         ball.strike(new Vec3(0.8, 0, 0));
         Vec3 cup = new Vec3(101.2, BALL_Y, 200.5);
 
-        StepOutcome outcome = engine.step(ball, new Grid(), cup, List.of());
+        StepOutcome outcome = engine.step(ball, context(new Grid(), cup), List.of());
 
         assertNotEquals(StepResult.SUNK, outcome.result(), "over the cup but too fast must not drop");
         assertFalse(ball.atRest());
@@ -276,7 +282,7 @@ class PhysicsEngineTest {
         target.comeToRest();
         striker.strike(new Vec3(0.4, 0, 0));
 
-        StepOutcome outcome = engine.step(striker, new Grid(), FAR_AWAY, List.of(target));
+        StepOutcome outcome = engine.step(striker, context(new Grid(), FAR_AWAY), List.of(target));
 
         assertSame(target, outcome.struck(), "the outcome should name the ball that was hit");
         assertFalse(target.atRest(), "a struck ball wakes up");
@@ -294,7 +300,7 @@ class PhysicsEngineTest {
         target.comeToRest();
         striker.strike(new Vec3(0.4, 0, 0));
 
-        StepOutcome outcome = noCollision.step(striker, new Grid(), FAR_AWAY, List.of(target));
+        StepOutcome outcome = noCollision.step(striker, context(new Grid(), FAR_AWAY), List.of(target));
 
         assertTrue(target.atRest(), "with collision off the ball is passed straight through");
         assertEquals(null, outcome.struck());
@@ -308,7 +314,7 @@ class PhysicsEngineTest {
         target.comeToRest();
         striker.strike(new Vec3(0.4, 0, 0));
 
-        engine.step(striker, new Grid(), FAR_AWAY, List.of(target));
+        engine.step(striker, context(new Grid(), FAR_AWAY), List.of(target));
 
         assertTrue(target.atRest(), "a ball behind the striker must not be woken");
     }

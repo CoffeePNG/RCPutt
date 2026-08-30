@@ -30,6 +30,7 @@ public final class PluginConfig {
     private TurnConfig turns = TurnConfig.DEFAULTS;
     private PowerMeterConfig powerMeter = PowerMeterConfig.DEFAULTS;
     private SnapshotConfig snapshots = SnapshotConfig.DEFAULTS;
+    private boolean confineToBounds = true;
     private boolean economyEnabled;
     private int leaderboardSize = 10;
     private double outOfBoundsPenalty = 1;
@@ -51,6 +52,7 @@ public final class PluginConfig {
         snapshots = readSnapshots(config.getConfigurationSection("snapshot"));
         wandItem = ItemDefinition.read(config.getConfigurationSection("items.wand"),
                 "BLAZE_ROD", "<light_purple>Course Wand</light_purple>");
+        confineToBounds = config.getBoolean("bounds.confine", true);
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
         outOfBoundsPenalty = Math.max(0, config.getInt("out_of_bounds.penalty", 1));
@@ -255,6 +257,26 @@ public final class PluginConfig {
 
     public ItemDefinition wandItem() {
         return wandItem;
+    }
+
+    /**
+     * What a block outside a hole's region reports as. A wall by default, which makes the bounds an
+     * invisible barrier and guarantees a ball can never reach - let alone read - a block that is
+     * not part of the course. Set {@code bounds.confine: false} to fall back to the plain
+     * out-of-bounds reset instead.
+     */
+    public Surface outsideBoundsSurface() {
+        if (!confineToBounds) {
+            return surfaces.defaultSurface();
+        }
+        Surface wall = surfaces.byId("wall");
+        return wall != null && wall.isWall()
+                ? wall
+                : new Surface("bounds", SurfaceType.WALL, 1.0, 0.70, 0, ResetMode.LAST_REST, null, false);
+    }
+
+    public boolean confineToBounds() {
+        return confineToBounds;
     }
 
     public boolean economyEnabled() {
