@@ -270,7 +270,7 @@ The bundled catalog is a flat message tree plus RCUI's metadata keys — **not**
 `schema-version`/`messages:` wrapper, which is what RCUI writes into the *operator* file:
 
 ```yaml
-prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RC Network</gradient> <#A9A9A9>»</#A9A9A9> '
+prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RCPutt</gradient> <#A9A9A9>»</#A9A9A9> '
 legacy-prefixes:
   - '<dark_green>[<green>PuttPutt</green>]</dark_green>'
   - '<dark_gray>[<green>PuttPutt</green>]</dark_gray>'
@@ -278,8 +278,10 @@ putt:
   still-rolling: '<red>Your ball is still rolling.</red>'
 ```
 
-That prefix is the **RC Network standard** and is deliberately identical across every RC plugin — it
-brands the network, not the plugin, so there is no PuttPutt-specific label in it. Don't localise it.
+That keeps the RC house format — the standard four-stop warm-to-cool gradient and the dark-gray
+guillemet — with `RCPutt` as the label. Note the shared network catalogs use `RC Network` there
+instead, identical across every plugin; this one deliberately identifies the plugin. Change the
+label, not the gradient, if you want it back in line.
 
 `component(...)` lookups stay unprefixed for action bars and GUI text; `message`/`send`/`broadcast`
 apply the prefix. `legacy-prefixes` lets RCUI strip our old branding once during adoption so migrated
