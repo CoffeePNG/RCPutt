@@ -7,7 +7,24 @@ per-course leaderboards.
 Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 
 - **Target:** Purpur 26.2 / Java 25
-- **Depends on:** RCParties (hard), Vault (soft — economy is a stubbed seam in v1)
+- **Depends on:** RCParties, RCUI (both hard; RCUI in turn requires RCPlatform), Vault (soft —
+  economy is a stubbed seam)
+- **Author:** Coffee ([@CoffeePNG](https://github.com/CoffeePNG)), RepubliCraft
+
+> **RCUI and RCPlatform are not ours.** They are Bobo's, part of the wider RepubliCraft framework —
+> the point being that shared concerns change in one plugin rather than seventeen. Consume their
+> published APIs only: never fork, vendor, or patch them here. If something is missing, ask for it
+> upstream as a generic primitive.
+
+> **Upgrading an existing server?** `config.yml` migrates automatically on start: missing keys are
+> filled from the packaged defaults and your own values kept, and values whose *meaning* changed are
+> rewritten (`items.putter.material: BOW` becomes `IRON_SHOVEL` — v2 putters are shovels and a bow
+> cannot drive the power meter). Every change is logged. The rewrite drops comments from your
+> `config.yml`; the packaged file stays the annotated reference.
+>
+> **v3 moves messages out of `config.yml` entirely** — RCUI owns the catalog now. A leftover
+> `messages:` block is no longer read; the migrator says so loudly rather than deleting your wording,
+> so you can re-apply it in RCUI's catalog and then remove the block.
 
 ## Build
 
@@ -17,8 +34,11 @@ The plugin targets Java 25, which may not be your shell default:
 ./build.sh package        # wrapper that pins JAVA_HOME to a JDK 25
 ```
 
-The jar lands in `target/RCPuttPutt-<version>.jar`. SQLite is not shaded — `plugin.yml` declares it
-under `libraries:` and Paper resolves it at load time.
+The jar lands in `target/RCPuttPutt-<version>.jar`. SQLite is not shaded: `paper-plugin.yml` has no
+`libraries:` key, so a `PluginLoader` hands Paper the Maven coordinate and it resolves at load time.
+
+Build order matters — RCPlatform, then RCUI, then RCParties must each be `mvn install`ed locally
+before this will compile, since none are published to a public repository.
 
 ## How it plays
 
@@ -287,7 +307,7 @@ must never be able to smuggle MiniMessage into a broadcast.
 - **RCUI** — a hard dependency (which in turn requires **RCPlatform**, so both must be installed).
   Resolved via `RCUI.messages(this).register(this, "rcputtputt", "messages.yml")`. `provided` scope:
   RCUI ships its API classes in its own plugin jar. A failed registration disables RCPuttPutt rather
-  than running it mute.
+  than letting it run mute.
 - **Vault** — `economy.enabled` is a v1 flag only; entry fees and payouts are not implemented.
 - **Betting** — `RCPuttPuttRoundCompleteEvent` fires once a round is fully torn down, carrying
   totals and par diffs for a future wager layer to settle against. Unfinished scorecards are absent
