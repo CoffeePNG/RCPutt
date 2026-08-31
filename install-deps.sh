@@ -42,8 +42,11 @@ build() {
         git -C "$dir" fetch origin "$branch"
         git -C "$dir" checkout "$branch"
     fi
-    echo "==> $name: mvn install"
-    (cd "$dir" && mvn -q install -DskipTests)
+    # NOT -q: quiet mode suppresses download and module progress, so a first build (which fetches
+    # paper-api and a dozen modules) sits silent for minutes and looks like a hang. -B keeps the
+    # output non-interactive and free of ANSI progress bars.
+    echo "==> $name: mvn install (first run downloads a lot; this can take several minutes)"
+    (cd "$dir" && mvn -B install -DskipTests)
 }
 
 # Order matters: RCUI compiles against rcplatform-api.
