@@ -9,7 +9,8 @@ Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 - **Target:** Paper/Purpur 1.21.11 / Java 21
 - **Depends on:** RCParties (hard), Vault (soft — economy is a stubbed seam)
 
-> **This is the `legacy/1.21.11` branch.** The mainline is `modern/26.2` (Purpur 26.2 / Java 25);
+> **This is the `legacy/1.21.11` branch.** Build RCParties' own `legacy/1.21.11` branch and
+> `mvn install` it first — the 26.2 API artifact is Java 25 bytecode and will not load here. The mainline is `modern/26.2` (Purpur 26.2 / Java 25);
 > this branch exists for servers still on 1.21.11. The two differ only in `pom.xml`, `plugin.yml`'s
 > `api-version` and `build.sh` — **every line of Java is identical**, because each API the plugin
 > touches has the same shape in both: `DataComponentTypes.CUSTOM_MODEL_DATA` and `CONSUMABLE`,
