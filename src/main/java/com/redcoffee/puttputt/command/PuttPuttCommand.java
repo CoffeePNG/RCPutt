@@ -8,7 +8,9 @@ import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.redcoffee.puttputt.RCPuttPuttPlugin;
 import com.redcoffee.puttputt.course.Course;
+import com.redcoffee.puttputt.config.ConfigMigrator;
 import com.redcoffee.puttputt.course.Hole;
+import com.redcoffee.puttputt.util.Bounds;
 import com.redcoffee.puttputt.game.Round;
 import com.redcoffee.puttputt.game.RoundManager;
 import com.redcoffee.puttputt.game.Scorecard;
@@ -264,6 +266,7 @@ public final class PuttPuttCommand {
                 .then(Commands.literal("hole")
                         .then(Commands.argument("hole", IntegerArgumentType.integer(1))
                                 .executes(this::adminHole)))
+                .then(Commands.literal("check").executes(this::adminCheck))
                 .then(Commands.literal("info").executes(this::adminInfo))
                 .then(Commands.literal("save").executes(this::adminSave))
                 .then(Commands.literal("reload").executes(this::adminReload))
@@ -527,6 +530,88 @@ public final class PuttPuttCommand {
         int hole = IntegerArgumentType.getInteger(context, "hole");
         session(player).selectHole(hole);
         plugin.messages().send(player, "wand.hole-selected", "hole", String.valueOf(hole));
+        return 1;
+    }
+
+    /**
+     * Diagnoses why a hole is not playing as built: what every block in its region actually maps to,
+     * and in particular whether anything is acting as a wall at ball height.
+     *
+     * <p>The usual cause of "the ball rolls straight through my walls" is a wall block that is not
+     * in the material map at all - an unmapped material reads as plain green, so the ball treats it
+     * as floor. The second cause is a wall built level with the green instead of one block above it:
+     * ground is sampled a block below the ball, walls at the ball's own layer.
+     */
+    private int adminCheck(CommandContext<CommandSourceStack> context) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        Course course = selectedCourse(player);
+        if (course == null) {
+            return 0;
+        }
+        int number = session(player).currentHole();
+        Hole hole = course.hole(number).orElse(null);
+        if (hole == null) {
+            plugin.messages().send(player, "admin.no-such-hole", "hole", String.valueOf(number));
+            return 0;
+        }
+        var world = plugin.getServer().getWorld(course.world());
+        if (world == null) {
+            plugin.messages().send(player, "round.world-missing", "world", String.valueOf(course.world()));
+            return 0;
+        }
+
+        var sender = context.getSource().getSender();
+        sender.sendMessage(plugin.messages().prefixed("check.header",
+                "course", course.id(), "hole", String.valueOf(number)));
+        if (!hole.isPlayable()) {
+            sender.sendMessage(plugin.messages().render("check.incomplete",
+                    "tee", String.valueOf(hole.tee() != null),
+                    "cup", String.valueOf(hole.cup() != null),
+                    "bounds", String.valueOf(hole.bounds() != null)));
+            return 0;
+        }
+
+        Bounds bounds = hole.bounds();
+        int ballY = (int) Math.floor(hole.tee().y());
+        Map<String, Integer> groundCensus = new java.util.TreeMap<>();
+        Map<String, Integer> unmappedAtBallHeight = new java.util.TreeMap<>();
+        int wallBlocks = 0;
+
+        for (int x = bounds.minX(); x <= bounds.maxX(); x++) {
+            for (int z = bounds.minZ(); z <= bounds.maxZ(); z++) {
+                var ground = world.getBlockAt(x, ballY - 1, z).getType();
+                if (!ground.isAir()) {
+                    var surface = plugin.config().surfaces()
+                            .forMaterial(ground.name(), hole.materialOverrides());
+                    groundCensus.merge(ground.name() + " -> " + surface.id(), 1, Integer::sum);
+                }
+                var atBall = world.getBlockAt(x, ballY, z).getType();
+                if (atBall.isAir()) {
+                    continue;
+                }
+                var surface = plugin.config().surfaces()
+                        .forMaterial(atBall.name(), hole.materialOverrides());
+                if (surface.isWall()) {
+                    wallBlocks++;
+                } else if (ConfigMigrator.looksLikeAWall(atBall.name())) {
+                    unmappedAtBallHeight.merge(atBall.name(), 1, Integer::sum);
+                }
+            }
+        }
+
+        groundCensus.entrySet().stream().limit(8).forEach(entry ->
+                sender.sendMessage(plugin.messages().render("check.ground",
+                        "mapping", entry.getKey(), "count", String.valueOf(entry.getValue()))));
+        sender.sendMessage(plugin.messages().render("check.walls", "count", String.valueOf(wallBlocks)));
+        if (wallBlocks == 0) {
+            sender.sendMessage(plugin.messages().render("check.no-walls", "y", String.valueOf(ballY)));
+        }
+        unmappedAtBallHeight.forEach((material, count) ->
+                sender.sendMessage(plugin.messages().render("check.unmapped",
+                        "material", material, "count", String.valueOf(count))));
         return 1;
     }
 
