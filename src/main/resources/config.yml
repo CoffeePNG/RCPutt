@@ -1,3 +1,6 @@
+# Bumped by the plugin when it migrates your file; do not edit by hand.
+config-version: 2
+
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
 # bumpers and pads are config entries rather than code.
@@ -209,6 +212,13 @@ messages:
     cup: '<green>Cup for hole <white><hole></white></green> <gray>set to <x>, <y>, <z>.</gray>'
     wrong-world: '<red>That course lives in world <world>.</red>'
     no-permission: '<red>You do not have permission to build courses.</red>'
+  check:
+    header: '<gold>Check: course <white><course></white>, hole <white><hole></white></gold>'
+    incomplete: '<red>Hole is incomplete.</red> <gray>tee=<tee> cup=<cup> bounds=<bounds></gray>'
+    ground: '<gray>  floor <white><mapping></white> x<count></gray>'
+    walls: '<gray>  wall blocks at ball height: <white><count></white></gray>'
+    no-walls: '<red>  No walls found at y=<y>.</red> <gray>Walls must sit one block ABOVE the green, and their material must be mapped to a wall surface.</gray>'
+    unmapped: '<yellow>  <material> x<count> is at ball height but is NOT mapped</yellow> <gray>- the ball rolls through it. Map it with /puttputt admin surface <material> wall</gray>'
   admin:
     course-created: '<green>Created course <white><course></white> in world <white><world></white>.</green>'
     course-exists: '<red>Course <course> already exists.</red>'

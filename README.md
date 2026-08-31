@@ -202,8 +202,15 @@ ground layer. The wand cannot make that mistake.
 /puttputt admin tphole <course> <hole>
 /puttputt admin delhole <hole>
 /puttputt admin info
+/puttputt admin check                 # diagnose a hole that is not playing as built
 /puttputt admin save | reload | delete <course>
 ```
+
+**`/puttputt admin check`** is the one to reach for when a hole misbehaves. It reports what every
+block in the hole's region actually maps to, and how many blocks are acting as walls at ball height.
+The usual cause of *"the ball rolls straight through my walls"* is a wall material that is not in
+`material_map` at all — an unmapped block reads as plain green, so the ball treats it as floor. The
+second cause is a wall built level with the green instead of one block above it.
 
 All admin commands need `rcputtputt.admin`. Edits live in memory until `save`.
 
@@ -244,8 +251,20 @@ as a plain snowball and bow.
 
 ## Integration seams
 
-- **RCParties** — bound reflectively through the services manager. If its API drifts, RCPuttPutt
-  logs it and degrades to solo play rather than throwing on every stroke.
+- **RCParties** — a hard dependency, compiled against the published `rcparties-api` artifact and
+  resolved through the Bukkit services manager. The dependency is `provided`: RCParties shades the
+  API into its own jar and ships it at runtime, so bundling a second copy would cause a
+  `LinkageError`. **Only `RCParties.jar` goes in `plugins/`, never the API jar.** Build the branch of
+  RCParties that matches your target (`claude/running-agentic-i3mb79` for 26.2/JDK 25,
+  `legacy/1.21.11` for 1.21.11/JDK 21) and `mvn install` it first — the API is compiled to that
+  branch's bytecode level, so the 26.2 artifact will not load on Java 21.
+
+  A player who is not in a party gets a party of one created for them, so solo is never
+  special-cased: the round logic has exactly one path for "who is playing". Party snapshots are
+  copied, never cached across ticks. `PartyDisbandEvent` and `PartyLeaveEvent` are handled so a
+  round cannot outlive its party, and the activity lock is released on every teardown path
+  (including a failed start) — a stuck lock would trap the party until an admin runs
+  `/party admin clearlocks`.
 - **Vault** — `economy.enabled` is a v1 flag only; entry fees and payouts are not implemented.
 - **Betting** — `RCPuttPuttRoundCompleteEvent` fires once a round is fully torn down, carrying
   totals and par diffs for a future wager layer to settle against. Unfinished scorecards are absent

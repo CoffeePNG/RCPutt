@@ -2,6 +2,7 @@ package com.redcoffee.puttputt;
 
 import com.redcoffee.puttputt.command.BuilderSessions;
 import com.redcoffee.puttputt.command.PuttPuttCommand;
+import com.redcoffee.puttputt.config.ConfigMigrator;
 import com.redcoffee.puttputt.config.Messages;
 import com.redcoffee.puttputt.config.PluginConfig;
 import com.redcoffee.puttputt.course.CourseManager;
@@ -9,12 +10,12 @@ import com.redcoffee.puttputt.game.PhysicsEngine;
 import com.redcoffee.puttputt.game.Round;
 import com.redcoffee.puttputt.game.RoundManager;
 import com.redcoffee.puttputt.snapshot.RoundSnapshot;
+import com.redcoffee.puttputt.input.PartyEventListener;
 import com.redcoffee.puttputt.input.PuttListener;
 import com.redcoffee.puttputt.input.WandListener;
 import com.redcoffee.puttputt.item.PuttItems;
 import com.redcoffee.puttputt.party.PartyProvider;
 import com.redcoffee.puttputt.party.RCPartiesProvider;
-import com.redcoffee.puttputt.party.SoloPartyProvider;
 import com.redcoffee.puttputt.storage.ScoreDao;
 import com.redcoffee.puttputt.storage.SqliteScoreDao;
 import com.redcoffee.puttputt.storage.StorageException;
@@ -39,6 +40,7 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        new ConfigMigrator(this).migrate(getConfig());
         config.load(getConfig());
 
         courses = new CourseManager(new File(getDataFolder(), "courses"), getLogger());
@@ -53,7 +55,14 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
             scoreDao = null;
         }
 
-        parties = RCPartiesProvider.bind(getLogger()).orElseGet(SoloPartyProvider::new);
+        // RCParties is a hard dependency declared in paper-plugin.yml, so a missing service means
+        // something is genuinely wrong. Refusing to enable beats running in a half-broken state.
+        parties = RCPartiesProvider.bind(getLogger()).orElse(null);
+        if (parties == null) {
+            getLogger().severe("RCParties registered no PartyService; RCPuttPutt cannot run without it.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         getLogger().info("Party backend: " + parties.name());
 
         items = new PuttItems(this);
@@ -62,6 +71,7 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new PuttListener(this), this);
         getServer().getPluginManager().registerEvents(new WandListener(this), this);
+        getServer().getPluginManager().registerEvents(new PartyEventListener(this), this);
 
         PuttPuttCommand commands = new PuttPuttCommand(this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -124,6 +134,7 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
     /** Re-reads config and courses. Live rounds keep the physics constants they started with. */
     public void reloadEverything() {
         reloadConfig();
+        new ConfigMigrator(this).migrate(getConfig());
         config.load(getConfig());
         courses.loadAll();
     }

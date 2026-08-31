@@ -86,6 +86,11 @@ public final class RoundManager {
         return roundId == null ? Optional.empty() : Optional.ofNullable(roundsById.get(roundId));
     }
 
+    /** Every live round belonging to a party. Normally at most one. */
+    public List<Round> roundsOfParty(UUID partyId) {
+        return roundsById.values().stream().filter(round -> round.partyId().equals(partyId)).toList();
+    }
+
     public int activeRounds() {
         return roundsById.size();
     }
@@ -139,8 +144,16 @@ public final class RoundManager {
             return fail("round.party-busy");
         }
 
-        Round round = new Round(course, party.partyId(), new LinkedHashSet<>(members), random);
-        register(round, members);
+        Round round;
+        try {
+            round = new Round(course, party.partyId(), new LinkedHashSet<>(members), random);
+            register(round, members);
+        } catch (RuntimeException ex) {
+            // Never leave a lock behind on a failed start - a stuck lock traps the party until an
+            // admin runs /party admin clearlocks.
+            plugin.parties().releaseActivityLock(party.partyId(), ACTIVITY_ID);
+            throw ex;
+        }
         plugin.runStorage(dao -> dao.recordRoundStart(round.roundId(), course.id(),
                 RoundSnapshot.encodeMembers(members), round.startedAt()));
         beginHole(round);
