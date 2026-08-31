@@ -37,8 +37,23 @@ The plugin targets Java 25, which may not be your shell default:
 The jar lands in `target/RCPuttPutt-<version>.jar`. SQLite is not shaded: `paper-plugin.yml` has no
 `libraries:` key, so a `PluginLoader` hands Paper the Maven coordinate and it resolves at load time.
 
-Build order matters — RCPlatform, then RCUI, then RCParties must each be `mvn install`ed locally
-before this will compile, since none are published to a public repository.
+### Dependencies must be built first
+
+None of the RC dependencies are published to a public Maven repository, so a plain build fails with
+`Could not find artifact net.republicraft:RCUI` (and the same for `rcplatform-api` and
+`rcparties-api`). Build them into your local `~/.m2` first:
+
+```sh
+./install-deps.sh
+```
+
+It clones (or reuses) RCPlatform, RCUI and RCParties beside this repo and `mvn install`s them **in
+that order** — RCUI compiles against `rcplatform-api`, so RCPlatform has to come first. Override
+`RCPLATFORM_URL` / `RCUI_URL` / `RCPARTIES_URL` to pull from Forgejo instead of the GitHub mirrors.
+
+**RCParties is branched per target** and both branches publish the same coordinates, so whichever
+you build *last* is what lands in `.m2`. The script defaults to the 26.2 branch
+(`claude/running-agentic-i3mb79`); its API is Java 25 bytecode and will not load on Java 21.
 
 ## How it plays
 
