@@ -20,6 +20,14 @@ RCPARTIES_BRANCH="${RCPARTIES_BRANCH:-claude/running-agentic-i3mb79}"
 
 WORKDIR="${WORKDIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 
+# All three dependencies target Java 25, same as RCPuttPutt. Reuse build.sh's JDK detection so they
+# are not built with whatever JDK happens to be on PATH - a mismatch here produces an artifact that
+# fails at runtime rather than at build time.
+if JDK25="$("$(dirname "$0")/build.sh" --java-home 2>/dev/null)" && [ -n "$JDK25" ]; then
+    export JAVA_HOME="$JDK25"
+    echo "Using JAVA_HOME=$JAVA_HOME"
+fi
+
 build() {
     local name="$1" url="$2" branch="${3:-}"
     local dir="$WORKDIR/$name"

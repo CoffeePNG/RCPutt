@@ -31,8 +31,13 @@ Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 The plugin targets Java 25, which may not be your shell default:
 
 ```sh
-./build.sh package        # wrapper that pins JAVA_HOME to a JDK 25
+./build.sh package        # finds a JDK 25 and builds with it
 ```
+
+`build.sh` locates a JDK 25 rather than assuming one: an already-correct `JAVA_HOME`, then
+`/usr/libexec/java_home -v 25` on macOS, then the usual Linux locations. If it cannot find one it
+says so and tells you how to install it. Force a specific JDK with
+`JAVA_HOME_25=/path/to/jdk-25 ./build.sh package`.
 
 The jar lands in `target/RCPuttPutt-<version>.jar`. SQLite is not shaded: `paper-plugin.yml` has no
 `libraries:` key, so a `PluginLoader` hands Paper the Maven coordinate and it resolves at load time.
