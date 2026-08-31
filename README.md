@@ -240,6 +240,34 @@ same finding that drove WeaponMechanics and RCPhone). Pack assets for both are a
 flag them to whoever owns the pack pipeline. Without them, the items still work; they just render
 as a plain snowball and bow.
 
+## Messages and prefixes
+
+Player-facing text lives in RCUI, not in `config.yml`. The plugin ships
+`src/main/resources/messages.yml` as its bundled defaults; RCUI copies that into an operator-facing
+catalog at `plugins/RCUI/messages/rcputtputt.yml`, which is the file to edit on a live server.
+
+The bundled catalog is a flat message tree plus RCUI's metadata keys — **not** the
+`schema-version`/`messages:` wrapper, which is what RCUI writes into the *operator* file:
+
+```yaml
+prefix: '<dark_gray>[<green>PuttPutt</green>]</dark_gray> '
+legacy-prefixes:
+  - '<dark_green>[<green>PuttPutt</green>]</dark_green>'
+putt:
+  still-rolling: '<red>Your ball is still rolling.</red>'
+```
+
+That single `prefix` is the point of the integration: every message this bundle sends carries it, in
+the same bracket-and-accent shape the other RC plugins use, changeable in one line. `component(...)`
+lookups stay unprefixed for action bars and GUI text; `message`/`send`/`broadcast` apply it.
+`legacy-prefixes` let RCUI strip our old inline branding once during adoption so migrated wording
+doesn't end up double-prefixed.
+
+`Messages` remains the seam rather than calling the bundle from ~60 sites, because it enforces one
+rule RCUI cannot know: a `Component` placeholder is trusted and renders, anything else is inserted
+as literal text. Course display names are authored config and are meant to render; a player name
+must never be able to smuggle MiniMessage into a broadcast.
+
 ## Integration seams
 
 - **RCParties** — a hard dependency, compiled against the published `rcparties-api` artifact and
@@ -256,6 +284,10 @@ as a plain snowball and bow.
   round cannot outlive its party, and the activity lock is released on every teardown path
   (including a failed start) — a stuck lock would trap the party until an admin runs
   `/party admin clearlocks`.
+- **RCUI** — a hard dependency (which in turn requires **RCPlatform**, so both must be installed).
+  Resolved via `RCUI.messages(this).register(this, "rcputtputt", "messages.yml")`. `provided` scope:
+  RCUI ships its API classes in its own plugin jar. A failed registration disables RCPuttPutt rather
+  than running it mute.
 - **Vault** — `economy.enabled` is a v1 flag only; entry fees and payouts are not implemented.
 - **Betting** — `RCPuttPuttRoundCompleteEvent` fires once a round is fully torn down, carrying
   totals and par diffs for a future wager layer to settle against. Unfinished scorecards are absent

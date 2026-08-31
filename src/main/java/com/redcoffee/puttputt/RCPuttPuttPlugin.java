@@ -19,6 +19,7 @@ import com.redcoffee.puttputt.party.RCPartiesProvider;
 import com.redcoffee.puttputt.storage.ScoreDao;
 import com.redcoffee.puttputt.storage.SqliteScoreDao;
 import com.redcoffee.puttputt.storage.StorageException;
+import net.republicraft.rcui.api.RCUI;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import java.io.File;
 import java.util.function.Consumer;
@@ -57,6 +58,17 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
 
         // RCParties is a hard dependency declared in paper-plugin.yml, so a missing service means
         // something is genuinely wrong. Refusing to enable beats running in a half-broken state.
+        // RCUI owns the message catalog and the shared prefix. Declared required in
+        // paper-plugin.yml, so a failure here is a genuine misconfiguration, not a soft fallback.
+        try {
+            config.messages().bind(RCUI.messages(this).register(this, "rcputtputt", "messages.yml"));
+        } catch (RuntimeException ex) {
+            getLogger().log(Level.SEVERE, "Could not register the RCUI message catalog; "
+                    + "RCPuttPutt cannot run without it.", ex);
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         parties = RCPartiesProvider.bind(getLogger()).orElse(null);
         if (parties == null) {
             getLogger().severe("RCParties registered no PartyService; RCPuttPutt cannot run without it.");
@@ -137,6 +149,10 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         new ConfigMigrator(this).migrate(getConfig());
         config.load(getConfig());
         courses.loadAll();
+        if (config.messages().isBound()) {
+            // Re-read RCUI's catalog too, so /puttputt admin reload picks up message edits.
+            RCUI.messages(this).reload();
+        }
     }
 
     public PluginConfig config() {

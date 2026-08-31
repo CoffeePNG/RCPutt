@@ -33,10 +33,21 @@ class ConfigMigratorTest {
         assertFalse(config.contains("power-meter.mode"));
     }
 
+    /** v3 moved messages to RCUI; a config that still carries the block must be flagged, not eaten. */
+    @Test
+    void aV2ConfigStillOwnsItsMessagesBlock() {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set("config-version", 2);
+        config.set("messages.putt.stroke", "<gray>custom wording</gray>");
+
+        assertTrue(config.isSet("messages"), "the migrator warns rather than deleting operator wording");
+        assertEquals(2, config.getInt("config-version"));
+    }
+
     @Test
     void versionDefaultsToOneWhenTheKeyIsAbsent() {
         assertEquals(1, v1Config().getInt("config-version", 1));
-        assertEquals(2, ConfigMigrator.CURRENT_VERSION);
+        assertEquals(3, ConfigMigrator.CURRENT_VERSION);
     }
 
     /** Wall-ish materials are flagged by the course check so an unmapped wall is obvious. */

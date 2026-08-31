@@ -43,7 +43,6 @@ public final class PluginConfig {
         physics = readPhysics(config.getConfigurationSection("physics"));
         readSurfaces(config.getConfigurationSection("surfaces"));
         readMaterialMap(config.getConfigurationSection("material_map"));
-        messages.load(config.getConfigurationSection("messages"));
         ballItem = ItemDefinition.read(config.getConfigurationSection("items.ball"), "SNOWBALL", "<white>Golf Ball</white>");
         putterItem = ItemDefinition.read(config.getConfigurationSection("items.putter"), "IRON_SHOVEL", "<gold>Putter</gold>");
         ballCollision = readBallCollision(config.getConfigurationSection("ball-collision"));

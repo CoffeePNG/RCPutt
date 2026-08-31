@@ -26,7 +26,7 @@ import org.bukkit.plugin.Plugin;
 public final class ConfigMigrator {
 
     /** Bump when a release adds keys or changes what an existing key means. */
-    public static final int CURRENT_VERSION = 2;
+    public static final int CURRENT_VERSION = 3;
 
     private static final String VERSION_KEY = "config-version";
 
@@ -71,6 +71,16 @@ public final class ConfigMigrator {
                 config.set("items.putter.material", "IRON_SHOVEL");
                 changes.add("items.putter.material: BOW -> IRON_SHOVEL (v2 putters are shovels)");
             }
+        }
+
+        // v2 -> v3: messages moved to RCUI, which owns the catalog and the shared prefix. Any
+        // customised strings left in config.yml would silently stop being read, so say so loudly
+        // rather than deleting them quietly - the operator needs to re-apply them in RCUI's catalog.
+        if (from < 3 && config.isSet("messages")) {
+            logger.warning("Message customisation has moved to RCUI. Your config.yml still has a "
+                    + "'messages' block; it is no longer read. Re-apply your wording in RCUI's "
+                    + "catalog for RCPuttPutt, then delete the block.");
+            changes.add("messages: now owned by RCUI (your block was left in place, unread)");
         }
 
         config.set(VERSION_KEY, CURRENT_VERSION);

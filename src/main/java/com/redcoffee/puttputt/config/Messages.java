@@ -1,80 +1,72 @@
 package com.redcoffee.puttputt.config;
 
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import net.kyori.adventure.audience.Audience;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
-import org.bukkit.configuration.ConfigurationSection;
+import net.republicraft.rcui.api.MessageBundle;
 
 /**
- * All player-facing strings, as MiniMessage, loaded from config. Nothing user-visible is hardcoded
- * in game logic; a missing key renders as the key itself so a typo is obvious in-game rather than
- * silently blank.
+ * All player-facing strings, delegated to RCUI.
+ *
+ * <p>RCUI owns the catalog and, crucially, the <em>prefix</em>: one top-level setting shared by
+ * every message this bundle sends, which is what keeps RCPuttPutt's chat styling in step with the
+ * other RC plugins instead of drifting on its own. {@code message}/{@code send} apply the prefix;
+ * {@code component} deliberately does not, so raw lookups stay usable for action bars, GUI text and
+ * composition.
+ *
+ * <p>This class stays as the seam rather than calling the bundle from ~60 sites directly, because
+ * it enforces one rule RCUI cannot know about: a {@link Component} value is trusted and inserted
+ * as-is, while anything else is inserted as literal text. That is the security boundary - course
+ * display names are authored config and are meant to render, but a player name must never be able
+ * to smuggle MiniMessage tags into a broadcast.
  */
 public final class Messages {
 
-    private final Map<String, String> raw = new HashMap<>();
-    private String prefix = "";
+    private MessageBundle bundle;
 
-    public void load(ConfigurationSection section) {
-        raw.clear();
-        if (section == null) {
-            return;
-        }
-        for (String key : section.getKeys(true)) {
-            if (section.isString(key)) {
-                raw.put(key, section.getString(key));
-            }
-        }
-        prefix = raw.getOrDefault("prefix", "");
+    /** Binds the RCUI bundle. Until this is called every lookup renders as its key. */
+    public void bind(MessageBundle bundle) {
+        this.bundle = bundle;
     }
 
-    /** Renders a message with {@code <name>} placeholders, without the prefix. */
+    public boolean isBound() {
+        return bundle != null;
+    }
+
+    /** Renders a message without the prefix - action bars, GUI text, composition. */
     public Component render(String key, Object... placeholders) {
-        String template = raw.get(key);
-        if (template == null) {
+        if (bundle == null) {
             return Component.text(key);
         }
-        return MiniMessage.miniMessage().deserialize(template, resolver(placeholders));
+        return bundle.component(key, resolvers(placeholders));
     }
 
-    /** Renders a message with the configured prefix in front of it. */
+    /** Renders a message with RCUI's shared prefix in front of it. */
     public Component prefixed(String key, Object... placeholders) {
-        String template = raw.get(key);
-        if (template == null) {
+        if (bundle == null) {
             return Component.text(key);
         }
-        return MiniMessage.miniMessage().deserialize(prefix + template, resolver(placeholders));
+        return bundle.message(key, resolvers(placeholders));
     }
 
     public void send(Audience audience, String key, Object... placeholders) {
         audience.sendMessage(prefixed(key, placeholders));
     }
 
+    /** Action bars are unprefixed: there is no room, and the context is already obvious. */
     public void sendActionBar(Audience audience, String key, Object... placeholders) {
         audience.sendActionBar(render(key, placeholders));
     }
 
-    public boolean has(String key) {
-        return raw.containsKey(key);
-    }
-
     /**
-     * Builds placeholder resolvers from alternating name/value pairs.
-     *
-     * <p>A {@link Component} value is inserted as-is; anything else is inserted as literal text and
-     * never parsed. That split is the security boundary: config- and course-authored text (a course
-     * display name, say) is deliberately rendered as MiniMessage by the caller and passed in
-     * already-parsed, while untrusted strings like player names cannot smuggle tags into a
-     * broadcast.
+     * Builds RCUI's resolvers from alternating name/value pairs, applying the trust rule above.
      */
-    private static TagResolver resolver(Object... placeholders) {
+    private static TagResolver[] resolvers(Object... placeholders) {
         if (placeholders.length == 0) {
-            return TagResolver.empty();
+            return new TagResolver[0];
         }
         if (placeholders.length % 2 != 0) {
             throw new IllegalArgumentException("Placeholders must be name/value pairs, got " + placeholders.length);
@@ -83,10 +75,10 @@ public final class Messages {
         for (int i = 0; i < placeholders.length; i += 2) {
             pairs.put(String.valueOf(placeholders[i]), placeholders[i + 1]);
         }
-        TagResolver.Builder builder = TagResolver.builder();
-        pairs.forEach((name, value) -> builder.resolver(value instanceof Component component
-                ? Placeholder.component(name, component)
-                : Placeholder.unparsed(name, String.valueOf(value))));
-        return builder.build();
+        return pairs.entrySet().stream()
+                .map(entry -> entry.getValue() instanceof Component component
+                        ? Placeholder.component(entry.getKey(), component)
+                        : Placeholder.unparsed(entry.getKey(), String.valueOf(entry.getValue())))
+                .toArray(TagResolver[]::new);
     }
 }

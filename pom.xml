@@ -9,6 +9,20 @@
   <version>1.0.0-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>RCPuttPutt</name>
+  <url>https://github.com/CoffeePNG/RCPutt</url>
+
+  <developers>
+    <developer>
+      <id>CoffeePNG</id>
+      <name>Nick Merzon</name>
+      <email>nickmerzon@gmail.com</email>
+      <organization>RepubliCraft</organization>
+      <roles>
+        <role>author</role>
+        <role>maintainer</role>
+      </roles>
+    </developer>
+  </developers>
   <description>Playable putt-putt with rolling-ball physics, configurable surfaces, party rounds and leaderboards.</description>
 
   <properties>
@@ -34,6 +48,21 @@
       <groupId>org.purpurmc.purpur</groupId>
       <artifactId>purpur-api</artifactId>
       <version>${purpur.version}</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <!-- RCUI (and the RCPlatform it sits on) are third-party: part of Bobo's shared RC framework,
+           not ours. Consumed through their published API only - never forked or vendored here.
+           provided, because RCUI ships these classes in its own plugin jar at runtime. -->
+      <groupId>net.republicraft</groupId>
+      <artifactId>RCUI</artifactId>
+      <version>3.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.republicraft.platform</groupId>
+      <artifactId>rcplatform-api</artifactId>
+      <version>1.0.0</version>
       <scope>provided</scope>
     </dependency>
     <dependency>

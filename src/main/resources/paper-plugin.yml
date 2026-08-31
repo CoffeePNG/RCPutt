@@ -4,11 +4,16 @@ main: com.redcoffee.puttputt.RCPuttPuttPlugin
 loader: com.redcoffee.puttputt.loader.RCPuttPuttLoader
 api-version: '26.2'
 description: Turn-based putt-putt with rolling-ball physics, configurable surfaces, party rounds and leaderboards.
-authors: [RedCoffee]
+authors: [CoffeePNG]
+website: https://github.com/CoffeePNG/RCPutt
 
 dependencies:
   server:
     RCParties:
+      load: BEFORE
+      required: true
+      join-classpath: true
+    RCUI:
       load: BEFORE
       required: true
       join-classpath: true
