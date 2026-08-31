@@ -1,19 +1,16 @@
 # RCUI message catalog for RCPuttPutt (bundled defaults).
 #
-# Bundled catalogs are a flat message tree plus RCUI's metadata keys: the top-level
-# 'prefix' shared by every message this bundle sends, and 'legacy-prefixes', which lets
-# RCUI strip our old inline branding once while adopting the shared one. RCUI writes the
-# operator-facing split file itself (that is where schema-version and the messages:
-# wrapper live) - do not add them here.
+# Bundled catalogs are a flat message tree plus RCUI's metadata keys - here just the top-level
+# 'prefix', shared by every message this bundle sends. RCUI writes the operator-facing split file
+# itself (that is where schema-version and the messages: wrapper live) - do not add them here.
 #
 # Keeps the RC house format - the standard four-stop warm-to-cool gradient and the dark-gray
 # guillemet - with RCPutt as the label rather than the shared "RC Network" wording.
-# legacy-prefixes lists the prefixes RCPuttPutt shipped before this one, so RCUI strips them once
-# during adoption instead of double-prefixing migrated wording.
+#
+# No legacy-prefixes key: that mechanism strips a prefix baked INLINE into message text during
+# adoption, and RCPuttPutt never did that - its old prefix was always a separate setting, so there
+# is nothing inline to strip.
 prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RCPutt</gradient> <#A9A9A9>»</#A9A9A9> '
-legacy-prefixes:
-- '<dark_green>[<green>PuttPutt</green>]</dark_green>'
-- '<dark_gray>[<green>PuttPutt</green>]</dark_gray>'
 putt:
   stroke: '<gray>Hole <white><hole></white> - stroke <white><strokes></white>.</gray>'
   still-rolling: '<red>Your ball is still rolling.</red>'

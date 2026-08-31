@@ -271,9 +271,6 @@ The bundled catalog is a flat message tree plus RCUI's metadata keys — **not**
 
 ```yaml
 prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RCPutt</gradient> <#A9A9A9>»</#A9A9A9> '
-legacy-prefixes:
-  - '<dark_green>[<green>PuttPutt</green>]</dark_green>'
-  - '<dark_gray>[<green>PuttPutt</green>]</dark_gray>'
 putt:
   still-rolling: '<red>Your ball is still rolling.</red>'
 ```
@@ -284,8 +281,9 @@ instead, identical across every plugin; this one deliberately identifies the plu
 label, not the gradient, if you want it back in line.
 
 `component(...)` lookups stay unprefixed for action bars and GUI text; `message`/`send`/`broadcast`
-apply the prefix. `legacy-prefixes` lets RCUI strip our old branding once during adoption so migrated
-wording doesn't end up double-prefixed.
+apply the prefix. There is no `legacy-prefixes` key: that mechanism strips a prefix baked *inline*
+into message text, and RCPuttPutt's prefix was always a separate setting, so there is nothing inline
+to strip.
 
 > **RCUI seeds a prefix only once.** It records the adoption in `plugins/RCUI/migrations.yml` and
 > thereafter treats the operator catalog as authoritative — correct, since that file is the
