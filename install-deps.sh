@@ -24,7 +24,16 @@ build() {
     local name="$1" url="$2" branch="${3:-}"
     local dir="$WORKDIR/$name"
     if [ -d "$dir/.git" ]; then
+        # Deliberately NOT pulling: this may be a working clone with local changes, and silently
+        # updating someone's checkout is worse than building what they have. But report exactly
+        # what is being built, because installing a stale artifact fails much later and much more
+        # confusingly than it does here.
+        local head desc dirty=""
+        head="$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || echo '?')"
+        desc="$(git -C "$dir" rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+        [ -n "$(git -C "$dir" status --porcelain 2>/dev/null)" ] && dirty=" (uncommitted changes)"
         echo "==> $name: using existing clone at $dir"
+        echo "    building $desc @ $head$dirty — not pulled; update it yourself if that is stale"
     else
         echo "==> $name: cloning into $dir"
         git clone "$url" "$dir"
