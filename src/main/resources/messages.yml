@@ -6,10 +6,13 @@
 # operator-facing split file itself (that is where schema-version and the messages:
 # wrapper live) - do not add them here.
 #
-# Changing the prefix below restyles every RCPuttPutt message in one place.
-prefix: '<dark_gray>[<green>PuttPutt</green>]</dark_gray> '
+# The prefix is the RC Network standard and is deliberately IDENTICAL across every RC plugin -
+# it brands the network, not the plugin, so do not swap in a PuttPutt-specific label.
+# legacy-prefixes lists the two prefixes RCPuttPutt shipped before adopting it.
+prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RC Network</gradient> <#A9A9A9>»</#A9A9A9> '
 legacy-prefixes:
 - '<dark_green>[<green>PuttPutt</green>]</dark_green>'
+- '<dark_gray>[<green>PuttPutt</green>]</dark_gray>'
 putt:
   stroke: '<gray>Hole <white><hole></white> - stroke <white><strokes></white>.</gray>'
   still-rolling: '<red>Your ball is still rolling.</red>'

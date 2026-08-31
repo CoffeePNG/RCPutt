@@ -270,18 +270,26 @@ The bundled catalog is a flat message tree plus RCUI's metadata keys — **not**
 `schema-version`/`messages:` wrapper, which is what RCUI writes into the *operator* file:
 
 ```yaml
-prefix: '<dark_gray>[<green>PuttPutt</green>]</dark_gray> '
+prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RC Network</gradient> <#A9A9A9>»</#A9A9A9> '
 legacy-prefixes:
   - '<dark_green>[<green>PuttPutt</green>]</dark_green>'
+  - '<dark_gray>[<green>PuttPutt</green>]</dark_gray>'
 putt:
   still-rolling: '<red>Your ball is still rolling.</red>'
 ```
 
-That single `prefix` is the point of the integration: every message this bundle sends carries it, in
-the same bracket-and-accent shape the other RC plugins use, changeable in one line. `component(...)`
-lookups stay unprefixed for action bars and GUI text; `message`/`send`/`broadcast` apply it.
-`legacy-prefixes` let RCUI strip our old inline branding once during adoption so migrated wording
-doesn't end up double-prefixed.
+That prefix is the **RC Network standard** and is deliberately identical across every RC plugin — it
+brands the network, not the plugin, so there is no PuttPutt-specific label in it. Don't localise it.
+
+`component(...)` lookups stay unprefixed for action bars and GUI text; `message`/`send`/`broadcast`
+apply the prefix. `legacy-prefixes` lets RCUI strip our old branding once during adoption so migrated
+wording doesn't end up double-prefixed.
+
+> **RCUI seeds a prefix only once.** It records the adoption in `plugins/RCUI/migrations.yml` and
+> thereafter treats the operator catalog as authoritative — correct, since that file is the
+> operator's. The consequence: a server that already started an *earlier* RCPuttPutt build keeps
+> whatever prefix it adopted, and changing the bundled default will not move it. Fix it by editing
+> `prefix:` in `plugins/RCUI/messages/rcputtputt.yml` directly. Verified both ways on a live server.
 
 `Messages` remains the seam rather than calling the bundle from ~60 sites, because it enforces one
 rule RCUI cannot know: a `Component` placeholder is trusted and renders, anything else is inserted
