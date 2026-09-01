@@ -250,17 +250,32 @@ second cause is a wall built level with the green instead of one block above it.
 
 All admin commands need `rcputtputt.admin`. Edits live in memory until `save`.
 
-### Setting bounds with marker blocks
+### Setting bounds by tracing the fairway
 
-The easiest way to bound a hole is to **place two blocks**. Put an `AMETHYST_BLOCK` (configurable via
-`bounds.marker-material`) at opposite corners of the hole and run `/puttputt admin setbounds` — the
-plugin scans up to `bounds.scan-radius` around you, takes the box containing every marker it finds,
-and adds `bounds.height-padding` of headroom above the highest one so walls sit inside.
+Mini-golf holes bend. A rectangle drawn around a dog-leg swallows the ground either side of the
+turn, so bounds are traced from the **tee outward**, following the playable floor wherever it goes.
 
-Markers beat a pos1/pos2 selection because they stay **visible in the world**: you can see a hole's
-boundary while building, move a corner by moving a block, and re-run `setbounds` later. More than two
-markers is fine — the box grows to contain them all. The two-corner selection still works as a
-fallback when no markers are found.
+Ring the hole in a boundary material — `SMOOTH_STONE_SLAB` by default, configurable as a list under
+`bounds.boundary-materials` — and run `/puttputt admin setbounds`. The plugin flood-fills from the
+tee across every cell a ball could actually roll onto, stopping at boundary blocks, at walls, at
+anything solid at ball height, and at any cell with no floor beneath it. The resulting region is the
+fairway's real shape: an L, a spiral, a horseshoe. Only the enclosing box is stored as the read
+window, but the traced cell set is what proves the hole is sealed.
+
+The fill refuses to squeeze through a diagonal gap — neighbours are the four cardinal directions
+only, because a diagonal pinch is a wall to a rolling ball. If it escapes into open terrain it
+stops at `bounds.max-cells` (40,000 by default) and reports the hole as leaking rather than
+silently bounding half your world; the message tells you to close the gap. If the tee itself sits
+inside a wall you're told that too.
+
+Two older methods still work as fallbacks, in order, when no trace is possible:
+
+1. **Marker blocks.** Place an `AMETHYST_BLOCK` (`bounds.marker-material`) at opposite corners; the
+   plugin scans `bounds.scan-radius` around you and takes the box containing every marker found.
+   More than two is fine — the box grows to contain them all.
+2. **A pos1/pos2 wand selection.**
+
+All three add `bounds.height-padding` of headroom above the floor so perimeter walls sit inside.
 
 ### The bounds are the course, literally
 

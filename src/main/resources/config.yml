@@ -120,10 +120,19 @@ snapshot:
   resume-window-minutes: 10
 
 bounds:
-  # Place two of these blocks at opposite corners of a hole, then run /puttputt admin setbounds.
-  # Markers stay visible in the world, so a hole's boundary can be seen and re-edited later -
-  # unlike a pos1/pos2 selection, which vanishes the moment it is set. Two-corner capture still
-  # works as a fallback when no markers are found.
+  # HOW A HOLE IS BOUNDED
+  #
+  # /puttputt admin setbounds traces the fairway outward from the tee and stops at these materials,
+  # so the boundary follows whatever shape you built - L-shaped, spiral, doubling back on itself.
+  # A bounding box cannot describe a course that bends, which is why tracing beats corners.
+  #
+  # Anything already mapped to a wall surface also stops the trace, as does a missing floor, so an
+  # unfenced drop bounds a hole just as a wall does.
+  boundary-materials:
+    - SMOOTH_STONE_SLAB
+  max-cells: 40000       # safety limit; hitting it means a gap in the boundary, not a big hole
+
+  # Fallback only, for a hole with no tee set yet: two of these at opposite corners give a box.
   marker-material: AMETHYST_BLOCK
   scan-radius: 64        # blocks searched around you; capped at 128
   height-padding: 4      # headroom added above the highest marker, so walls sit inside the box

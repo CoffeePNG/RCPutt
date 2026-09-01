@@ -10,6 +10,8 @@ import com.redcoffee.puttputt.RCPuttPuttPlugin;
 import com.redcoffee.puttputt.course.Course;
 import com.redcoffee.puttputt.config.ConfigMigrator;
 import com.redcoffee.puttputt.course.BoundsMarkers;
+import com.redcoffee.puttputt.course.CourseRegion;
+import com.redcoffee.puttputt.course.WorldRegionScanner;
 import com.redcoffee.puttputt.course.Hole;
 import com.redcoffee.puttputt.util.Bounds;
 import com.redcoffee.puttputt.game.Round;
@@ -379,7 +381,18 @@ public final class PuttPuttCommand {
      * Sets a hole's bounds, preferring marker blocks placed in the world and falling back to the
      * two-corner selection. Markers win because they stay visible and editable after the fact.
      */
+    /**
+     * Derives a hole's bounds.
+     *
+     * <p>Preferred route is a flood fill from the tee, because a bounding box cannot describe a
+     * course that bends - an L-shaped or spiral hole has a rectangle far bigger than the fairway.
+     * Flooding follows whatever shape was actually built and stops at the boundary materials.
+     * Marker blocks and a pos1/pos2 selection remain as fallbacks.
+     */
     private void applyBounds(Player player, Hole hole) {
+        if (hole.tee() != null && fillFromTee(player, hole)) {
+            return;
+        }
         Material marker = Material.matchMaterial(plugin.config().boundsMarker());
         if (marker != null) {
             BoundsMarkers.Result result = BoundsMarkers.scan(player.getLocation(), marker,
@@ -395,17 +408,12 @@ public final class PuttPuttCommand {
                         "max", b.maxX() + ", " + b.maxY() + ", " + b.maxZ());
                 return;
             }
-            if (result.markersFound() == 1) {
-                plugin.messages().send(player, "admin.bounds-one-marker", "material", marker.name());
-                return;
-            }
         }
 
         BuilderSession session = session(player);
         if (!session.hasBothCorners()) {
             plugin.messages().send(player, "admin.bounds-none",
-                    "material", marker == null ? plugin.config().boundsMarker() : marker.name(),
-                    "radius", String.valueOf(plugin.config().boundsScanRadius()));
+                    "material", String.join(", ", plugin.config().boundaryMaterials()));
             return;
         }
         hole.setBounds(session.toBounds());
@@ -414,6 +422,43 @@ public final class PuttPuttCommand {
                 "hole", String.valueOf(hole.number()),
                 "min", b.minX() + ", " + b.minY() + ", " + b.minZ(),
                 "max", b.maxX() + ", " + b.maxY() + ", " + b.maxZ());
+    }
+
+    /** Floods the fairway from the tee. Returns false if the fill could not produce a usable region. */
+    private boolean fillFromTee(Player player, Hole hole) {
+        var world = plugin.getServer().getWorld(
+                plugin.courses().course(session(player).courseId()).map(Course::world).orElse(null));
+        if (world == null) {
+            return false;
+        }
+        Vec3 tee = hole.tee();
+        var boundary = plugin.config().boundaryMaterialSet();
+        CourseRegion.OpenTest open = WorldRegionScanner.openTest(
+                world, plugin.config().surfaces(), hole.materialOverrides(), boundary);
+
+        CourseRegion.Result region = CourseRegion.fill(
+                tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(), open,
+                plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding());
+
+        if (region.bounds() == null) {
+            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            return false;
+        }
+        if (region.exhausted()) {
+            // Almost always a gap in the boundary rather than a genuinely enormous hole.
+            plugin.messages().send(player, "admin.bounds-leaked",
+                    "cells", String.valueOf(region.size()),
+                    "material", String.join(", ", plugin.config().boundaryMaterials()));
+            return false;
+        }
+        hole.setBounds(region.bounds());
+        Bounds b = region.bounds();
+        plugin.messages().send(player, "admin.bounds-from-fill",
+                "hole", String.valueOf(hole.number()),
+                "cells", String.valueOf(region.size()),
+                "min", b.minX() + ", " + b.minY() + ", " + b.minZ(),
+                "max", b.maxX() + ", " + b.maxY() + ", " + b.maxZ());
+        return true;
     }
 
     private int adminDeleteHole(CommandContext<CommandSourceStack> context) {

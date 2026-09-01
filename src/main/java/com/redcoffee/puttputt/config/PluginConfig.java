@@ -32,6 +32,8 @@ public final class PluginConfig {
     private SnapshotConfig snapshots = SnapshotConfig.DEFAULTS;
     private boolean confineToBounds = true;
     private String boundsMarker = "AMETHYST_BLOCK";
+    private java.util.List<String> boundaryMaterials = java.util.List.of("SMOOTH_STONE_SLAB");
+    private int boundsMaxCells = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS;
     private int boundsScanRadius = 64;
     private int boundsHeightPadding = 4;
     private boolean economyEnabled;
@@ -56,6 +58,10 @@ public final class PluginConfig {
                 "BLAZE_ROD", "<light_purple>Course Wand</light_purple>");
         confineToBounds = config.getBoolean("bounds.confine", true);
         boundsMarker = config.getString("bounds.marker-material", "AMETHYST_BLOCK");
+        java.util.List<String> configured = config.getStringList("bounds.boundary-materials");
+        boundaryMaterials = configured.isEmpty() ? java.util.List.of("SMOOTH_STONE_SLAB") : java.util.List.copyOf(configured);
+        boundsMaxCells = Math.max(64, config.getInt("bounds.max-cells",
+                com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS));
         boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
         boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
         economyEnabled = config.getBoolean("economy.enabled", false);
@@ -284,6 +290,28 @@ public final class PluginConfig {
     /** Block material that marks a hole's corners in the world. */
     public String boundsMarker() {
         return boundsMarker;
+    }
+
+    /** Materials that bound a hole, whatever shape it is drawn in. */
+    public java.util.List<String> boundaryMaterials() {
+        return boundaryMaterials;
+    }
+
+    public java.util.Set<org.bukkit.Material> boundaryMaterialSet() {
+        java.util.Set<org.bukkit.Material> out = new java.util.LinkedHashSet<>();
+        for (String name : boundaryMaterials) {
+            org.bukkit.Material material = org.bukkit.Material.matchMaterial(name);
+            if (material == null) {
+                logger.warning("Unknown bounds.boundary-materials entry '" + name + "'; ignoring it.");
+            } else {
+                out.add(material);
+            }
+        }
+        return out;
+    }
+
+    public int boundsMaxCells() {
+        return boundsMaxCells;
     }
 
     public int boundsScanRadius() {
