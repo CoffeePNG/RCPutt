@@ -67,8 +67,16 @@ public final class PuttPuttCommand {
                         .then(Commands.argument("course", StringArgumentType.word())
                                 .suggests(courseSuggestions())
                                 .executes(this::leaderboard)))
-                .then(adminTree())
+                .then(adminTree("admin"))
                 .build();
+    }
+
+    /**
+     * {@code /ppa ...} - the admin tree as its own command, so building a course does not mean
+     * typing {@code /puttputt admin} in front of every edit.
+     */
+    public LiteralCommandNode<CommandSourceStack> buildAdmin() {
+        return adminTree("ppa").build();
     }
 
     // ------------------------------------------------------------------ player commands
@@ -217,8 +225,14 @@ public final class PuttPuttCommand {
 
     // ------------------------------------------------------------------ admin commands
 
-    private LiteralArgumentBuilder<CommandSourceStack> adminTree() {
-        return Commands.literal("admin")
+    /**
+     * The builder half of the admin tree, hung both under {@code /puttputt admin} and on its own as
+     * {@code /ppa}. Brigadier nodes belong to exactly one parent, so the tree is built twice under
+     * two names rather than shared - a redirect would make the standalone form still expect the
+     * {@code admin} token.
+     */
+    LiteralArgumentBuilder<CommandSourceStack> adminTree(String name) {
+        return Commands.literal(name)
                 .requires(source -> source.getSender().hasPermission(ADMIN_PERMISSION))
                 .then(Commands.literal("create")
                         .then(Commands.argument("course", StringArgumentType.word())
@@ -438,7 +452,8 @@ public final class PuttPuttCommand {
 
         CourseRegion.Result region = CourseRegion.fill(
                 tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(), open,
-                plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding());
+                plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
+                plugin.config().boundsMaxDrop());
 
         if (region.bounds() == null) {
             plugin.messages().send(player, "admin.bounds-tee-blocked");

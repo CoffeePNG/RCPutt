@@ -26,7 +26,7 @@ import org.bukkit.plugin.Plugin;
 public final class ConfigMigrator {
 
     /** Bump when a release adds keys or changes what an existing key means. */
-    public static final int CURRENT_VERSION = 3;
+    public static final int CURRENT_VERSION = 4;
 
     private static final String VERSION_KEY = "config-version";
 
@@ -82,6 +82,10 @@ public final class ConfigMigrator {
                     + "catalog for RCPuttPutt, then delete the block.");
             changes.add("messages: now owned by RCUI (your block was left in place, unread)");
         }
+
+        // v3 -> v4: bounds.max-drop arrived, so a traced hole follows a fairway over a ledge
+        // instead of stopping at it. The packaged-defaults merge above adds the key; this step
+        // exists so servers already on v3 run that merge at all.
 
         config.set(VERSION_KEY, CURRENT_VERSION);
         plugin.saveConfig();

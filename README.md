@@ -200,6 +200,10 @@ Aliases: `/pp`, `/golf`.
 
 No hand-editing geometry. Pick a course once, then walk the holes.
 
+Every admin subcommand is also its own command as **`/ppa`**, since building a course means typing a
+lot of small edits: `/ppa settee 3` is `/puttputt admin settee 3`. The two are the same tree, so use
+whichever reads better.
+
 **With the wand (recommended):**
 
 ```
@@ -261,6 +265,12 @@ tee across every cell a ball could actually roll onto, stopping at boundary bloc
 anything solid at ball height, and at any cell with no floor beneath it. The resulting region is the
 fairway's real shape: an L, a spiral, a horseshoe. Only the enclosing box is stored as the read
 window, but the traced cell set is what proves the hole is sealed.
+
+The trace follows drops. A fairway that falls over a ledge into a lower green is still one hole, so
+the fill steps down with it, up to `bounds.max-drop` blocks per step (8 by default; set it to 0 to
+keep the trace on a single layer). Only downward — a ball rolls off a ledge but never up one, and a
+trace that climbed would escape over the hole's own walls. A drop deeper than the limit is the edge
+of the hole, and a wall is a wall at every height, so the probe never tunnels underneath one.
 
 The fill refuses to squeeze through a diagonal gap — neighbours are the four cardinal directions
 only, because a diagonal pinch is a wall to a rolling ball. If it escapes into open terrain it

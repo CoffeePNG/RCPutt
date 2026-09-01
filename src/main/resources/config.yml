@@ -1,5 +1,5 @@
 # Bumped by the plugin when it migrates your file; do not edit by hand.
-config-version: 3
+config-version: 4
 
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
@@ -131,6 +131,10 @@ bounds:
   boundary-materials:
     - SMOOTH_STONE_SLAB
   max-cells: 40000       # safety limit; hitting it means a gap in the boundary, not a big hole
+  # How far the trace follows a drop. A fairway that falls over a ledge into a lower green is still
+  # one hole, so the trace steps down with it. Only downward: a ball rolls off a ledge, never up
+  # one, and a trace that climbed would escape over the hole's own walls. 0 keeps it on one layer.
+  max-drop: 8
 
   # Fallback only, for a hole with no tee set yet: two of these at opposite corners give a box.
   marker-material: AMETHYST_BLOCK

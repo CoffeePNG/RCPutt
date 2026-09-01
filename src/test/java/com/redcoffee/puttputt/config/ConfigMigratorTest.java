@@ -47,7 +47,7 @@ class ConfigMigratorTest {
     @Test
     void versionDefaultsToOneWhenTheKeyIsAbsent() {
         assertEquals(1, v1Config().getInt("config-version", 1));
-        assertEquals(3, ConfigMigrator.CURRENT_VERSION);
+        assertEquals(4, ConfigMigrator.CURRENT_VERSION);
     }
 
     /** Wall-ish materials are flagged by the course check so an unmapped wall is obvious. */

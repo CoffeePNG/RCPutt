@@ -40,6 +40,92 @@ class CourseRegionTest {
         throw new IllegalArgumentException("no tee in map");
     }
 
+    /**
+     * A terraced map: each digit is how many blocks below the tee that cell's floor sits, so the
+     * cell is open at exactly one height. '#' is still boundary.
+     */
+    private static CourseRegion.OpenTest terraces(String... rows) {
+        Set<String> open = new HashSet<>();
+        for (int z = 0; z < rows.length; z++) {
+            for (int x = 0; x < rows[z].length(); x++) {
+                char c = rows[z].charAt(x);
+                if (c != '#') {
+                    open.add(x + ":" + (Y - (c - '0')) + ":" + z);
+                }
+            }
+        }
+        return (x, y, z) -> open.contains(x + ":" + y + ":" + z);
+    }
+
+    /** A fairway that falls over a ledge is still one hole, so the trace steps down with it. */
+    @Test
+    void followsAFairwayDownADrop() {
+        CourseRegion.Result result = CourseRegion.fill(1, Y, 1,
+                terraces(
+                        "#####",
+                        "#000#",
+                        "#112#",
+                        "#####"),
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 8);
+
+        assertTrue(result.isUsable());
+        assertEquals(6, result.size(), "both terraces belong to the hole");
+        // The floor sits one below the lowest cell reached, two down from the tee.
+        assertEquals(Y - 3, result.bounds().minY());
+        assertEquals(Y + 4, result.bounds().maxY());
+    }
+
+    /** With drops off, the same map is one flat layer - the lower terrace is somebody else's hole. */
+    @Test
+    void staysOnOneLayerWhenDropsAreDisabled() {
+        CourseRegion.Result result = CourseRegion.fill(1, Y, 1,
+                terraces(
+                        "#####",
+                        "#000#",
+                        "#112#",
+                        "#####"),
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 0);
+
+        assertEquals(3, result.size());
+        assertEquals(Y, result.bounds().maxY() - 4);
+    }
+
+    /** A drop deeper than the limit is the edge of the hole, not a route into the ravine below. */
+    @Test
+    void willNotFollowADropBeyondTheLimit() {
+        CourseRegion.Result result = CourseRegion.fill(1, Y, 1,
+                terraces(
+                        "####",
+                        "#00#",
+                        "#99#",
+                        "####"),
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 3);
+
+        assertEquals(2, result.size(), "only the top terrace is reachable");
+    }
+
+    /** A wall is a wall at every height: the trace must not tunnel underneath one. */
+    @Test
+    void doesNotProbeDownwardPastAWall() {
+        CourseRegion.OpenTest open = (x, y, z) -> {
+            if (z != 0 || x < 0 || x > 3) {
+                return false;
+            }
+            if (x == 0) {
+                return y == Y;          // the tee
+            }
+            if (x == 1) {
+                return false;           // a wall, at every height
+            }
+            return y == Y - 2;          // open ground beyond it, two down
+        };
+
+        CourseRegion.Result result = CourseRegion.fill(0, Y, 0, open,
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 8);
+
+        assertEquals(1, result.size(), "the wall ends the hole even though it is short");
+    }
+
     /** The headline case: an L-shaped hole whose box is far larger than its fairway. */
     @Test
     void tracesAnLShapedCourse() {

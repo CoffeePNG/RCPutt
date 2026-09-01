@@ -86,8 +86,13 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PartyEventListener(this), this);
 
         PuttPuttCommand commands = new PuttPuttCommand(this);
-        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
-                event.registrar().register(commands.build(), "Play putt-putt.", java.util.List.of("pp", "golf")));
+        getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
+            event.registrar().register(commands.build(), "Play putt-putt.", java.util.List.of("pp", "golf"));
+            // Course building is a long session of many small edits, so the admin tree gets its own
+            // root as well as living under /puttputt admin.
+            event.registrar().register(commands.buildAdmin(), "Build putt-putt courses.",
+                    java.util.List.of("puttadmin"));
+        });
 
         // Deferred a tick so worlds and other plugins are fully up before we rebuild rounds.
         getServer().getScheduler().runTaskLater(this, this::restoreRounds, 20L);

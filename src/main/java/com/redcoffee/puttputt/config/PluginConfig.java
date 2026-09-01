@@ -34,6 +34,7 @@ public final class PluginConfig {
     private String boundsMarker = "AMETHYST_BLOCK";
     private java.util.List<String> boundaryMaterials = java.util.List.of("SMOOTH_STONE_SLAB");
     private int boundsMaxCells = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS;
+    private int boundsMaxDrop = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP;
     private int boundsScanRadius = 64;
     private int boundsHeightPadding = 4;
     private boolean economyEnabled;
@@ -62,6 +63,8 @@ public final class PluginConfig {
         boundaryMaterials = configured.isEmpty() ? java.util.List.of("SMOOTH_STONE_SLAB") : java.util.List.copyOf(configured);
         boundsMaxCells = Math.max(64, config.getInt("bounds.max-cells",
                 com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS));
+        boundsMaxDrop = Math.max(0, config.getInt("bounds.max-drop",
+                com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP));
         boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
         boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
         economyEnabled = config.getBoolean("economy.enabled", false);
@@ -295,6 +298,11 @@ public final class PluginConfig {
     /** Materials that bound a hole, whatever shape it is drawn in. */
     public java.util.List<String> boundaryMaterials() {
         return boundaryMaterials;
+    }
+
+    /** How far the trace will follow a drop downward before treating it as the edge of the hole. */
+    public int boundsMaxDrop() {
+        return boundsMaxDrop;
     }
 
     public java.util.Set<org.bukkit.Material> boundaryMaterialSet() {

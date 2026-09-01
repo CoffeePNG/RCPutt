@@ -47,24 +47,42 @@ public final class CourseRegion {
         }
     }
 
-    /**
-     * Floods outward on one horizontal layer from the start cell.
-     *
-     * @param heightPadding blocks of headroom added above the layer, so walls standing on the green
-     *                      end up inside the resulting box
-     */
+    /** Default number of blocks a fill will follow a drop downward. */
+    public static final int DEFAULT_MAX_DROP = 8;
+
+    /** Floods outward on a single layer, following no drops. */
     public static Result fill(int startX, int startY, int startZ, OpenTest open,
                               int maxCells, int heightPadding) {
+        return fill(startX, startY, startZ, open, maxCells, heightPadding, 0);
+    }
+
+    /**
+     * Floods outward from the start cell, stepping down into drops along the way.
+     *
+     * <p>Courses are rarely flat: a fairway falls away over a ledge into a lower green, and a
+     * single-layer fill would read that ledge as the end of the hole. So when a neighbour is not
+     * open at the current height, the fill probes downward up to {@code maxDrop} blocks for the
+     * first cell that is, and carries on from there. Only downward - a ball rolls off a ledge but
+     * never up one, and a fill that climbed would escape over the course's own walls.
+     *
+     * @param heightPadding blocks of headroom added above the highest layer reached, so walls
+     *                      standing on the green end up inside the resulting box
+     * @param maxDrop       how far a single step may fall; 0 keeps the fill on one layer
+     */
+    public static Result fill(int startX, int startY, int startZ, OpenTest open,
+                              int maxCells, int heightPadding, int maxDrop) {
         Set<String> seen = new LinkedHashSet<>();
         Set<long[]> cells = new LinkedHashSet<>();
         if (!open.isOpen(startX, startY, startZ)) {
             return new Result(Set.of(), null, false);
         }
         int limit = Math.max(1, maxCells);
+        int drop = Math.max(0, maxDrop);
         int minX = startX, maxX = startX, minZ = startZ, maxZ = startZ;
+        int minY = startY, maxY = startY;
 
         Deque<int[]> queue = new ArrayDeque<>();
-        queue.add(new int[]{startX, startZ});
+        queue.add(new int[]{startX, startY, startZ});
         seen.add(startX + ":" + startZ);
         boolean exhausted = false;
 
@@ -74,25 +92,48 @@ public final class CourseRegion {
                 break;
             }
             int[] at = queue.poll();
-            int x = at[0], z = at[1];
-            cells.add(new long[]{x, startY, z});
+            int x = at[0], y = at[1], z = at[2];
+            cells.add(new long[]{x, y, z});
             minX = Math.min(minX, x);  maxX = Math.max(maxX, x);
             minZ = Math.min(minZ, z);  maxZ = Math.max(maxZ, z);
+            minY = Math.min(minY, y);  maxY = Math.max(maxY, y);
 
             // Four-way, not eight: a diagonal gap between two wall blocks is a wall to a rolling
             // ball, and letting the fill squeeze through it would leak outside the course.
             for (int[] step : new int[][]{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}) {
                 int nx = x + step[0], nz = z + step[1];
                 String key = nx + ":" + nz;
-                if (seen.contains(key) || !open.isOpen(nx, startY, nz)) {
+                if (seen.contains(key)) {
+                    continue;
+                }
+                int landing = landingHeight(open, nx, y, nz, drop);
+                if (landing == NO_LANDING) {
                     continue;
                 }
                 seen.add(key);
-                queue.add(new int[]{nx, nz});
+                queue.add(new int[]{nx, landing, nz});
             }
         }
-        Bounds bounds = Bounds.of(minX, startY - 1, minZ,
-                maxX, startY + Math.max(0, heightPadding), maxZ);
+        Bounds bounds = Bounds.of(minX, minY - 1, minZ,
+                maxX, maxY + Math.max(0, heightPadding), maxZ);
         return new Result(cells, bounds, exhausted);
+    }
+
+    private static final int NO_LANDING = Integer.MIN_VALUE;
+
+    /**
+     * The height at which a ball entering this column would come to rest, or {@link #NO_LANDING} if
+     * it cannot enter at all.
+     *
+     * <p>A wall is a wall at every height, so the probe stops at the first blocked cell rather than
+     * hunting past it: only an open column with nothing underneath it counts as a drop.
+     */
+    private static int landingHeight(OpenTest open, int x, int fromY, int z, int maxDrop) {
+        for (int y = fromY; y >= fromY - maxDrop; y--) {
+            if (open.isOpen(x, y, z)) {
+                return y;
+            }
+        }
+        return NO_LANDING;
     }
 }
