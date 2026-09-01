@@ -31,6 +31,9 @@ public final class PluginConfig {
     private PowerMeterConfig powerMeter = PowerMeterConfig.DEFAULTS;
     private SnapshotConfig snapshots = SnapshotConfig.DEFAULTS;
     private boolean confineToBounds = true;
+    private String boundsMarker = "AMETHYST_BLOCK";
+    private int boundsScanRadius = 64;
+    private int boundsHeightPadding = 4;
     private boolean economyEnabled;
     private int leaderboardSize = 10;
     private double outOfBoundsPenalty = 1;
@@ -52,6 +55,9 @@ public final class PluginConfig {
         wandItem = ItemDefinition.read(config.getConfigurationSection("items.wand"),
                 "BLAZE_ROD", "<light_purple>Course Wand</light_purple>");
         confineToBounds = config.getBoolean("bounds.confine", true);
+        boundsMarker = config.getString("bounds.marker-material", "AMETHYST_BLOCK");
+        boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
+        boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
         outOfBoundsPenalty = Math.max(0, config.getInt("out_of_bounds.penalty", 1));
@@ -196,7 +202,8 @@ public final class PluginConfig {
                     PowerMeterConfig.Mode.parse(section.getString("mode"), defaults.mode()),
                     section.getDouble("min-velocity", defaults.minVelocity()),
                     section.getDouble("max-velocity", defaults.maxVelocity()),
-                    section.getInt("sweep-ticks", defaults.sweepTicks()));
+                    section.getInt("sweep-ticks", defaults.sweepTicks()),
+                    section.getDouble("sneak-rate", defaults.sneakRate()));
         } catch (IllegalArgumentException ex) {
             logger.warning("Invalid power-meter config (" + ex.getMessage() + "); using defaults.");
             return defaults;
@@ -272,6 +279,19 @@ public final class PluginConfig {
         return wall != null && wall.isWall()
                 ? wall
                 : new Surface("bounds", SurfaceType.WALL, 1.0, 0.70, 0, ResetMode.LAST_REST, null, false);
+    }
+
+    /** Block material that marks a hole's corners in the world. */
+    public String boundsMarker() {
+        return boundsMarker;
+    }
+
+    public int boundsScanRadius() {
+        return boundsScanRadius;
+    }
+
+    public int boundsHeightPadding() {
+        return boundsHeightPadding;
     }
 
     public boolean confineToBounds() {

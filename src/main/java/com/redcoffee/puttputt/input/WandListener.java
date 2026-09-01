@@ -64,10 +64,12 @@ public final class WandListener implements Listener {
             markTeeOrCup(player, session, mark, block, leftClick);
             return;
         }
+        // Corners record the block itself; tee/cup record its top face (the ball plane).
+        Vec3 corner = BuilderSession.blockOf(block.getX(), block.getY(), block.getZ());
         if (leftClick) {
-            session.setCorner1(mark);
+            session.setCorner1(corner);
         } else {
-            session.setCorner2(mark);
+            session.setCorner2(corner);
         }
         plugin.messages().send(player, "wand.corner",
                 "corner", leftClick ? "1" : "2",

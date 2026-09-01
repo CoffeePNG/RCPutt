@@ -310,11 +310,16 @@ public final class RoundManager {
             state.startChargeIfNeeded(plugin, round, playerId);
             PowerMeter meter = state.meter();
             if (meter != null) {
-                double power = meter.tick();
-                meter.updateTitle(plugin.messages().render("power.title",
+                // Sneaking crawls the meter, so a short putt can be dialled in instead of stabbed at.
+                boolean precise = player.isSneaking();
+                double power = meter.tick(precise ? plugin.config().powerMeter().sneakRate() : 1.0);
+                meter.updateTitle(plugin.messages().render(
+                        precise ? "power.title-precise" : "power.title",
                         "player", player.getName(),
                         "percent", String.valueOf((int) Math.round(power * 100))));
             }
+            // The clock keeps running while charging - holding the putter is not a way to stall.
+            tickShotClock(round, state, player);
             return;
         }
         if (state.meter() != null) {
@@ -323,12 +328,25 @@ public final class RoundManager {
             return;
         }
 
+        tickShotClock(round, state, player);
+    }
+
+    /**
+     * Runs the shot clock down and paints it on the action bar.
+     *
+     * <p>The action bar carries the countdown every tick rather than a warning in the last few
+     * seconds: the boss bar is already taken by the power meter, and a clock you can only see once
+     * it is nearly out is not a clock.
+     */
+    private void tickShotClock(Round round, TurnState state, Player player) {
         if (state.tickClock()) {
-            timeoutTurn(round, playerId);
-        } else if (state.shouldWarn()) {
-            plugin.messages().sendActionBar(player, "turn.clock",
-                    "seconds", String.valueOf(state.secondsLeft()));
+            timeoutTurn(round, state.currentPlayer());
+            return;
         }
+        plugin.messages().sendActionBar(player, "turn.clock",
+                "seconds", String.valueOf(state.secondsLeft()),
+                "bar", state.clockBar(),
+                "tenths", String.format(java.util.Locale.ROOT, "%.1f", state.secondsLeftExact()));
     }
 
     private void strike(Round round, TurnState state, Player player) {

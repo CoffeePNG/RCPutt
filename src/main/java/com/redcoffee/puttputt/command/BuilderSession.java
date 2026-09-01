@@ -47,6 +47,17 @@ public final class BuilderSession {
         return new Vec3(blockX + 0.5, blockY + 1.0, blockZ + 0.5);
     }
 
+    /**
+     * The clicked block itself, centred in X and Z but keeping its own Y.
+     *
+     * <p>Bounds corners must NOT use {@link #topFaceOf}: that returns {@code blockY + 1}, and
+     * {@link #toBounds()} floors it, so marking two floor blocks at y=64 recorded the box as y=65
+     * and excluded the very layer the ball rolls on.
+     */
+    public static Vec3 blockOf(int blockX, int blockY, int blockZ) {
+        return new Vec3(blockX + 0.5, blockY, blockZ + 0.5);
+    }
+
     public void setCorner1(Vec3 corner) {
         this.corner1 = corner;
     }

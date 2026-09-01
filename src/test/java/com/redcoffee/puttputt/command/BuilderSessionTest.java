@@ -32,14 +32,34 @@ class BuilderSessionTest {
         assertEquals(-11.5, mark.z(), 1.0e-9);
     }
 
+    /**
+     * The bug this guards: corners used to be stored via topFaceOf, which returns blockY + 1, and
+     * toBounds floors it. Marking two floor blocks at y=64 recorded the box as y=65 - excluding the
+     * very layer the ball rolls on.
+     */
+    @Test
+    void boundsCornersRecordTheClickedBlockNotItsTopFace() {
+        assertEquals(64.0, BuilderSession.blockOf(10, 64, 20).y(), 1.0e-9,
+                "a corner keeps the block's own Y");
+        assertEquals(65.0, BuilderSession.topFaceOf(10, 64, 20).y(), 1.0e-9,
+                "a tee/cup mark still sits on the top face");
+
+        BuilderSession session = new BuilderSession();
+        session.setCorner1(BuilderSession.blockOf(0, 64, 0));
+        session.setCorner2(BuilderSession.blockOf(10, 64, 10));
+
+        assertEquals(64, session.toBounds().minY(), "the floor layer must be inside the box");
+        assertEquals(64, session.toBounds().maxY());
+    }
+
     @Test
     void boundsNeedBothCornersAndAreOrderIndependent() {
         BuilderSession session = new BuilderSession();
         assertFalse(session.hasBothCorners());
 
-        session.setCorner1(BuilderSession.topFaceOf(125, 68, 210));
+        session.setCorner1(BuilderSession.blockOf(125, 68, 210));
         assertFalse(session.hasBothCorners(), "one corner is not a selection");
-        session.setCorner2(BuilderSession.topFaceOf(95, 64, 195));
+        session.setCorner2(BuilderSession.blockOf(95, 64, 195));
 
         assertTrue(session.hasBothCorners());
         Bounds bounds = session.toBounds();

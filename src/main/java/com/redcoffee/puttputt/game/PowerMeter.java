@@ -17,7 +17,7 @@ public final class PowerMeter {
     private final UUID playerId;
     private final PowerMeterConfig config;
     private final BossBar bar;
-    private int heldTicks;
+    private double heldTicks;
     private boolean shown;
 
     public PowerMeter(UUID playerId, PowerMeterConfig config, Component title) {
@@ -34,13 +34,18 @@ public final class PowerMeter {
         return bar;
     }
 
-    public int heldTicks() {
+    public double heldTicks() {
         return heldTicks;
     }
 
-    /** Advances the charge by a tick and returns the current 0..1 reading. */
-    public double tick() {
-        heldTicks++;
+    /**
+     * Advances the charge and returns the current 0..1 reading.
+     *
+     * @param step how much of a tick to advance by - less than 1 while the player sneaks, which is
+     *             what makes the meter crawl for a delicate putt
+     */
+    public double tick(double step) {
+        heldTicks += step;
         double power = power();
         bar.progress((float) Math.clamp(power, 0.0, 1.0));
         // Colour tracks the reading so a glance at the bar reads as weak / medium / full power.

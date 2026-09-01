@@ -13,8 +13,10 @@ import java.util.Locale;
  * @param minVelocity launch velocity at 0% power
  * @param maxVelocity launch velocity at 100% power
  * @param sweepTicks  ticks for one 0 -> 100 pass of the bar
+ * @param sneakRate   fraction of normal speed while sneaking, for fine control on short putts
  */
-public record PowerMeterConfig(Mode mode, double minVelocity, double maxVelocity, int sweepTicks) {
+public record PowerMeterConfig(Mode mode, double minVelocity, double maxVelocity, int sweepTicks,
+                               double sneakRate) {
 
     /** How the meter moves while the player holds the putter. */
     public enum Mode {
@@ -35,9 +37,12 @@ public record PowerMeterConfig(Mode mode, double minVelocity, double maxVelocity
         }
     }
 
-    public static final PowerMeterConfig DEFAULTS = new PowerMeterConfig(Mode.OSCILLATE, 0.08, 0.9, 30);
+    public static final PowerMeterConfig DEFAULTS = new PowerMeterConfig(Mode.OSCILLATE, 0.08, 0.9, 30, 0.35);
 
     public PowerMeterConfig {
+        if (!(sneakRate > 0.0) || sneakRate > 1.0) {
+            throw new IllegalArgumentException("power-meter sneak-rate must be in (0, 1], got " + sneakRate);
+        }
         if (sweepTicks <= 0) {
             throw new IllegalArgumentException("power-meter sweep ticks must be positive, got " + sweepTicks);
         }
@@ -57,8 +62,8 @@ public record PowerMeterConfig(Mode mode, double minVelocity, double maxVelocity
      * The meter reading after {@code heldTicks} of charging. FILL saturates at 1; OSCILLATE runs a
      * triangle wave so the bar sweeps up and back down.
      */
-    public double powerAt(int heldTicks) {
-        double phase = (double) heldTicks / sweepTicks;
+    public double powerAt(double heldTicks) {
+        double phase = heldTicks / sweepTicks;
         if (mode == Mode.FILL) {
             return Math.min(1.0, phase);
         }

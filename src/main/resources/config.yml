@@ -109,6 +109,9 @@ power-meter:
   # fill      = bar rises to full and holds; release fires at the current value.
   mode: oscillate
   sweep-ticks: 30         # ticks for one 0 -> 100 pass
+  # Hold SNEAK while charging to crawl the meter, for dialling in a short putt.
+  # 0.35 = about a third of normal speed. 1.0 disables the fine mode.
+  sneak-rate: 0.35
   min-velocity: 0.08
   max-velocity: 0.9       # clamped to physics.max_velocity
 
@@ -117,6 +120,14 @@ snapshot:
   resume-window-minutes: 10
 
 bounds:
+  # Place two of these blocks at opposite corners of a hole, then run /puttputt admin setbounds.
+  # Markers stay visible in the world, so a hole's boundary can be seen and re-edited later -
+  # unlike a pos1/pos2 selection, which vanishes the moment it is set. Two-corner capture still
+  # works as a fallback when no markers are found.
+  marker-material: AMETHYST_BLOCK
+  scan-radius: 64        # blocks searched around you; capped at 128
+  height-padding: 4      # headroom added above the highest marker, so walls sit inside the box
+
   # true  = a hole's bounds are a hard boundary. Blocks outside the region read as wall, so a ball
   #         physically cannot leave a course - and, more to the point, the physics can never read a
   #         block that is not part of the hole. Terracotta, sand or water elsewhere on your server

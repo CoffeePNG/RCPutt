@@ -5,12 +5,18 @@
 # itself (that is where schema-version and the messages: wrapper live) - do not add them here.
 #
 # Keeps the RC house format - the standard four-stop warm-to-cool gradient and the dark-gray
-# guillemet - with RCPutt as the label rather than the shared "RC Network" wording.
+# guillemet.
+#
+# The label is RCPuttPutt, not RCPutt, and the length is deliberate: MiniMessage spreads a gradient
+# across the CHARACTER COUNT, so a 6-character label samples between the stops and never actually
+# shows the brand colours. At 10 characters the ramp lands on exactly the same hex values as the
+# shared "RC Network" prefix - verified character by character. Renaming to a shorter word will
+# silently shift every colour again.
 #
 # No legacy-prefixes key: that mechanism strips a prefix baked INLINE into message text during
 # adoption, and RCPuttPutt never did that - its old prefix was always a separate setting, so there
 # is nothing inline to strip.
-prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RCPutt</gradient> <#A9A9A9>»</#A9A9A9> '
+prefix: '<gradient:#FF7F50:#DB7093:#9370DB:#87CEFA>RCPuttPutt</gradient> <#A9A9A9>»</#A9A9A9> '
 putt:
   stroke: '<gray>Hole <white><hole></white> - stroke <white><strokes></white>.</gray>'
   still-rolling: '<red>Your ball is still rolling.</red>'
@@ -22,12 +28,13 @@ putt:
   out-of-bounds: '<red>Out of bounds!</red> <gray>+<penalty> stroke(s).</gray>'
 power:
   title: '<yellow><player>''s power: <white><percent>%</white></yellow>'
+  title-precise: '<aqua><player>''s power: <white><percent>%</white> <gray>(fine)</gray></aqua>'
 turn:
   yours: '<green>Your turn!</green> <gray>Hold right-click to charge. <white><seconds>s</white> on the clock.</gray>'
   other: '<gray>Waiting on <white><player></white>...</gray>'
   not-yours: '<red>It is not your turn.</red>'
   order: '<gray>Order this hole: <white><order></white></gray>'
-  clock: '<red><seconds></red><gray>s left</gray>'
+  clock: '<gray><bar></gray>  <white><tenths></white><gray>s</gray>'
   timeout: '<red>Out of time!</red> <gray>+<penalty> stroke(s).</gray>'
   capped: '<red>Maximum <strokes> strokes on this hole.</red>'
 round:
@@ -85,7 +92,10 @@ admin:
   cup-set: '<green>Cup for hole <hole> set to your position.</green>'
   par-set: '<green>Hole <hole> is now par <par>.</green>'
   corner-set: '<green>Corner <corner> set to <x>, <y>, <z>.</green>'
-  bounds-set: '<green>Bounds for hole <hole> set from your selection.</green>'
+  bounds-set: '<green>Bounds for hole <white><hole></white> set from your selection.</green> <gray><min> to <max></gray>'
+  bounds-from-markers: '<green>Bounds for hole <white><hole></white> set from <white><count></white> <material> markers.</green> <gray><min> to <max></gray>'
+  bounds-one-marker: '<red>Only one <material> found.</red> <gray>Place at least two, at opposite corners of the hole.</gray>'
+  bounds-none: '<red>No bounds set.</red> <gray>Place two <material> blocks at opposite corners (searched <radius> blocks), or use pos1/pos2.</gray>'
   no-selection: '<red>Set both corners first: /puttputt admin pos1 and pos2.</red>'
   no-such-hole: '<red>Hole <hole> does not exist on this course.</red>'
   hole-deleted: '<green>Deleted hole <hole>.</green>'

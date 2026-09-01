@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 class PowerMeterConfigTest {
 
     private final PowerMeterConfig oscillate =
-            new PowerMeterConfig(PowerMeterConfig.Mode.OSCILLATE, 0.1, 0.9, 20);
+            new PowerMeterConfig(PowerMeterConfig.Mode.OSCILLATE, 0.1, 0.9, 20, 0.35);
     private final PowerMeterConfig fill =
-            new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.1, 0.9, 20);
+            new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.1, 0.9, 20, 0.35);
 
     /** The sweep must go up and come back down, or there is no timing skill in the meter. */
     @Test
@@ -55,7 +55,26 @@ class PowerMeterConfigTest {
     @Test
     void rejectsAnInvertedVelocityBand() {
         assertThrows(IllegalArgumentException.class,
-                () -> new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.9, 0.2, 20));
+                () -> new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.9, 0.2, 20, 0.35));
+    }
+
+    /** Sneaking must crawl the meter, not stop or reverse it. */
+    @Test
+    void sneakRateSlowsTheSweepWithoutBreakingIt() {
+        PowerMeterConfig config = new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.1, 0.9, 20, 0.25);
+
+        assertEquals(0.25, config.sneakRate(), 1.0e-9);
+        // A quarter-speed hold covers a quarter of the sweep in the same number of ticks.
+        assertEquals(config.powerAt(5.0), config.powerAt(20 * 0.25), 1.0e-9);
+        assertTrue(config.powerAt(20 * 0.25) < config.powerAt(20.0));
+    }
+
+    @Test
+    void rejectsANonsenseSneakRate() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.1, 0.9, 20, 0.0));
+        assertThrows(IllegalArgumentException.class,
+                () -> new PowerMeterConfig(PowerMeterConfig.Mode.FILL, 0.1, 0.9, 20, 1.5));
     }
 
     @Test

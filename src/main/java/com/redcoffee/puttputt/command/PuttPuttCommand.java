@@ -9,6 +9,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import com.redcoffee.puttputt.RCPuttPuttPlugin;
 import com.redcoffee.puttputt.course.Course;
 import com.redcoffee.puttputt.config.ConfigMigrator;
+import com.redcoffee.puttputt.course.BoundsMarkers;
 import com.redcoffee.puttputt.course.Hole;
 import com.redcoffee.puttputt.util.Bounds;
 import com.redcoffee.puttputt.game.Round;
@@ -339,7 +340,10 @@ public final class PuttPuttCommand {
         if (player == null) {
             return 0;
         }
-        Vec3 corner = feetOf(player.getLocation());
+        // The block the admin is standing ON, not their feet plane - see BuilderSession.blockOf.
+        var standing = player.getLocation();
+        Vec3 corner = BuilderSession.blockOf(standing.getBlockX(),
+                standing.getBlockY() - 1, standing.getBlockZ());
         BuilderSession session = session(player);
         if (first) {
             session.setCorner1(corner);
@@ -371,14 +375,45 @@ public final class PuttPuttCommand {
         return 1;
     }
 
+    /**
+     * Sets a hole's bounds, preferring marker blocks placed in the world and falling back to the
+     * two-corner selection. Markers win because they stay visible and editable after the fact.
+     */
     private void applyBounds(Player player, Hole hole) {
+        Material marker = Material.matchMaterial(plugin.config().boundsMarker());
+        if (marker != null) {
+            BoundsMarkers.Result result = BoundsMarkers.scan(player.getLocation(), marker,
+                    plugin.config().boundsScanRadius(), plugin.config().boundsHeightPadding());
+            if (result.isUsable()) {
+                hole.setBounds(result.bounds());
+                Bounds b = result.bounds();
+                plugin.messages().send(player, "admin.bounds-from-markers",
+                        "hole", String.valueOf(hole.number()),
+                        "count", String.valueOf(result.markersFound()),
+                        "material", marker.name(),
+                        "min", b.minX() + ", " + b.minY() + ", " + b.minZ(),
+                        "max", b.maxX() + ", " + b.maxY() + ", " + b.maxZ());
+                return;
+            }
+            if (result.markersFound() == 1) {
+                plugin.messages().send(player, "admin.bounds-one-marker", "material", marker.name());
+                return;
+            }
+        }
+
         BuilderSession session = session(player);
         if (!session.hasBothCorners()) {
-            plugin.messages().send(player, "admin.no-selection");
+            plugin.messages().send(player, "admin.bounds-none",
+                    "material", marker == null ? plugin.config().boundsMarker() : marker.name(),
+                    "radius", String.valueOf(plugin.config().boundsScanRadius()));
             return;
         }
         hole.setBounds(session.toBounds());
-        plugin.messages().send(player, "admin.bounds-set", "hole", String.valueOf(hole.number()));
+        Bounds b = session.toBounds();
+        plugin.messages().send(player, "admin.bounds-set",
+                "hole", String.valueOf(hole.number()),
+                "min", b.minX() + ", " + b.minY() + ", " + b.minZ(),
+                "max", b.maxX() + ", " + b.maxY() + ", " + b.maxZ());
     }
 
     private int adminDeleteHole(CommandContext<CommandSourceStack> context) {

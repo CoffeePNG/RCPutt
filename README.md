@@ -81,6 +81,11 @@ lead putts first** — reading the green for everyone else with no information o
 deliberate: it hands trailing players a small edge and keeps rounds close. Set
 `turn-order.mode: descending` to reward the leader instead.
 
+The **action bar is the shot clock** — a draining bar and a tenth-of-a-second countdown, shown for
+the whole turn rather than only as a last-moment warning. The boss bar is the power meter, so the two
+never compete. **Hold sneak while charging** to crawl the meter (`power-meter.sneak-rate`, default
+about a third speed) for dialling in a short putt.
+
 A turn ends when the player strikes, or when the 30-second shot clock expires (forfeit, +1 stroke).
 Three forfeits in a row caps the player out on that hole so one AFK player cannot stall the round.
 No new turn begins until **every** ball has come to rest, so knock-ons fully resolve first.
@@ -244,6 +249,18 @@ The usual cause of *"the ball rolls straight through my walls"* is a wall materi
 second cause is a wall built level with the green instead of one block above it.
 
 All admin commands need `rcputtputt.admin`. Edits live in memory until `save`.
+
+### Setting bounds with marker blocks
+
+The easiest way to bound a hole is to **place two blocks**. Put an `AMETHYST_BLOCK` (configurable via
+`bounds.marker-material`) at opposite corners of the hole and run `/puttputt admin setbounds` — the
+plugin scans up to `bounds.scan-radius` around you, takes the box containing every marker it finds,
+and adds `bounds.height-padding` of headroom above the highest one so walls sit inside.
+
+Markers beat a pos1/pos2 selection because they stay **visible in the world**: you can see a hole's
+boundary while building, move a corner by moving a block, and re-run `setbounds` later. More than two
+markers is fine — the box grows to contain them all. The two-corner selection still works as a
+fallback when no markers are found.
 
 ### The bounds are the course, literally
 
