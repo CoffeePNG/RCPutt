@@ -94,6 +94,8 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
                     java.util.List.of("puttadmin"));
         });
 
+        startCourseAutosave();
+
         // Deferred a tick so worlds and other plugins are fully up before we rebuild rounds.
         getServer().getScheduler().runTaskLater(this, this::restoreRounds, 20L);
     }
@@ -140,6 +142,9 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        // Before anything else: a course edited but never explicitly saved must not die with the
+        // server. Builders reasonably expect /stop to keep their work.
+        flushCourses("shutdown");
         if (rounds != null) {
             rounds.shutdown();
         }
@@ -148,8 +153,39 @@ public final class RCPuttPuttPlugin extends JavaPlugin {
         }
     }
 
+    /**
+     * Writes out any course edits that are not on disk yet.
+     *
+     * <p>Course files are small and only rewritten when their content actually changed, so this is
+     * cheap enough to run on a timer.
+     */
+    public int flushCourses(String why) {
+        if (courses == null) {
+            return 0;
+        }
+        try {
+            int written = courses.flushDirty();
+            if (written > 0) {
+                getLogger().info("Saved " + written + " course(s) on " + why + ".");
+            }
+            return written;
+        } catch (java.io.IOException ex) {
+            getLogger().log(java.util.logging.Level.SEVERE,
+                    "Could not save courses on " + why + "; edits may be lost.", ex);
+            return 0;
+        }
+    }
+
+    private void startCourseAutosave() {
+        long period = Math.max(1, config.courseAutosaveSeconds()) * 20L;
+        getServer().getScheduler().runTaskTimer(this, () -> flushCourses("autosave"), period, period);
+    }
+
     /** Re-reads config and courses. Live rounds keep the physics constants they started with. */
     public void reloadEverything() {
+        // loadAll() below drops everything held in memory, so unsaved edits have to land first or a
+        // reload silently throws away the course somebody just built.
+        flushCourses("reload");
         reloadConfig();
         new ConfigMigrator(this).migrate(getConfig());
         config.load(getConfig());

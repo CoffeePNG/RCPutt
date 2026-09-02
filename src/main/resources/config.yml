@@ -156,6 +156,13 @@ out_of_bounds:
 leaderboard:
   size: 10
 
+courses:
+  # Course edits are held in memory while you build, and written out this often. /puttputt admin save
+  # (or /ppa save) still writes immediately; this is the safety net, so a crash or a /stop before you
+  # remember to save does not cost you the hole. Courses are also written on shutdown and before a
+  # reload, and only files whose content actually changed are touched.
+  autosave-seconds: 60
+
 economy:
   # v1 seam only. Entry fees and payouts are stubbed until the Vault integration lands.
   enabled: false

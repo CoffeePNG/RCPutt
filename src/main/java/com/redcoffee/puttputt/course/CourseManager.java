@@ -26,6 +26,14 @@ public final class CourseManager {
     private final File directory;
     private final Logger logger;
     private final Map<String, Course> courses = new ConcurrentHashMap<>();
+    /**
+     * The YAML last written (or read) for each course, so a flush can skip courses nobody touched.
+     *
+     * <p>Comparing the serialised form rather than tracking a dirty flag is deliberate: a hole hands
+     * out its live material-override map, so an edit can happen without passing through any setter
+     * a flag could hang off. Rendering the course and diffing the text cannot miss one.
+     */
+    private final Map<String, String> lastWritten = new ConcurrentHashMap<>();
 
     public CourseManager(File directory, Logger logger) {
         this.directory = directory;
@@ -34,6 +42,7 @@ public final class CourseManager {
 
     public void loadAll() {
         courses.clear();
+        lastWritten.clear();
         if (!directory.exists() && !directory.mkdirs()) {
             logger.warning("Could not create course directory " + directory);
             return;
@@ -46,6 +55,8 @@ public final class CourseManager {
             try {
                 Course course = read(file);
                 courses.put(key(course.id()), course);
+                // Seed the baseline so a course nobody has edited is not rewritten on first flush.
+                lastWritten.put(key(course.id()), serialize(course));
             } catch (RuntimeException ex) {
                 // One malformed course must not take the whole plugin down with it.
                 logger.log(Level.WARNING, "Skipping unreadable course file " + file.getName(), ex);
@@ -77,6 +88,7 @@ public final class CourseManager {
     }
 
     public boolean delete(String id) {
+        lastWritten.remove(key(id));
         Course removed = courses.remove(key(id));
         if (removed == null) {
             return false;
@@ -91,10 +103,46 @@ public final class CourseManager {
         }
     }
 
+    /**
+     * Writes only the courses whose content has actually changed.
+     *
+     * <p>Called on a timer and at shutdown, because a course that lives in memory until someone
+     * remembers to type {@code save} is a course that a restart eats.
+     *
+     * @return how many files were written
+     */
+    public int flushDirty() throws IOException {
+        int written = 0;
+        for (Course course : courses.values()) {
+            if (!serialize(course).equals(lastWritten.get(key(course.id())))) {
+                save(course);
+                written++;
+            }
+        }
+        return written;
+    }
+
+    /** True when some course has edits that are not on disk yet. */
+    public boolean hasUnsavedChanges() {
+        for (Course course : courses.values()) {
+            if (!serialize(course).equals(lastWritten.get(key(course.id())))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void save(Course course) throws IOException {
         if (!directory.exists() && !directory.mkdirs()) {
             throw new IOException("Could not create course directory " + directory);
         }
+        String rendered = serialize(course);
+        java.nio.file.Files.writeString(fileFor(course.id()).toPath(), rendered);
+        lastWritten.put(key(course.id()), rendered);
+    }
+
+    /** The course as it would appear on disk. */
+    private String serialize(Course course) {
         YamlConfiguration yaml = new YamlConfiguration();
         yaml.set("id", course.id());
         yaml.set("display", course.displayName());
@@ -135,7 +183,7 @@ public final class CourseManager {
             holes.add(node);
         }
         yaml.set("holes", holes);
-        yaml.save(fileFor(course.id()));
+        return yaml.saveToString();
     }
 
     private Course read(File file) {

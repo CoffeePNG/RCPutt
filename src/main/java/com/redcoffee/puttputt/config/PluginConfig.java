@@ -37,6 +37,7 @@ public final class PluginConfig {
     private int boundsMaxDrop = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP;
     private int boundsScanRadius = 64;
     private int boundsHeightPadding = 4;
+    private int courseAutosaveSeconds = 60;
     private boolean economyEnabled;
     private int leaderboardSize = 10;
     private double outOfBoundsPenalty = 1;
@@ -67,6 +68,7 @@ public final class PluginConfig {
                 com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP));
         boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
         boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
+        courseAutosaveSeconds = Math.max(1, config.getInt("courses.autosave-seconds", 60));
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
         outOfBoundsPenalty = Math.max(0, config.getInt("out_of_bounds.penalty", 1));
@@ -288,6 +290,11 @@ public final class PluginConfig {
         return wall != null && wall.isWall()
                 ? wall
                 : new Surface("bounds", SurfaceType.WALL, 1.0, 0.70, 0, ResetMode.LAST_REST, null, false);
+    }
+
+    /** How often unsaved course edits are written out, in seconds. */
+    public int courseAutosaveSeconds() {
+        return courseAutosaveSeconds;
     }
 
     /** Block material that marks a hole's corners in the world. */

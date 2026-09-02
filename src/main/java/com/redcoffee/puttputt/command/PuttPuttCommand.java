@@ -11,6 +11,7 @@ import com.redcoffee.puttputt.course.Course;
 import com.redcoffee.puttputt.config.ConfigMigrator;
 import com.redcoffee.puttputt.course.BoundsMarkers;
 import com.redcoffee.puttputt.course.CourseRegion;
+import com.redcoffee.puttputt.course.FillVisualizer;
 import com.redcoffee.puttputt.course.WorldRegionScanner;
 import com.redcoffee.puttputt.course.Hole;
 import com.redcoffee.puttputt.util.Bounds;
@@ -19,6 +20,7 @@ import com.redcoffee.puttputt.game.RoundManager;
 import com.redcoffee.puttputt.game.Scorecard;
 import com.redcoffee.puttputt.storage.LeaderboardEntry;
 import com.redcoffee.puttputt.util.Vec3;
+import org.bukkit.scheduler.BukkitTask;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.io.IOException;
@@ -47,6 +49,8 @@ public final class PuttPuttCommand {
     private static final String ADMIN_PERMISSION = "rcputtputt.admin";
 
     private final RCPuttPuttPlugin plugin;
+    /** One live fill preview per player, so a second /ppa showfill replaces the first. */
+    private final java.util.Map<java.util.UUID, BukkitTask> fillPreviews = new java.util.HashMap<>();
 
     public PuttPuttCommand(RCPuttPuttPlugin plugin) {
         this.plugin = plugin;
@@ -283,6 +287,11 @@ public final class PuttPuttCommand {
                 .then(Commands.literal("hole")
                         .then(Commands.argument("hole", IntegerArgumentType.integer(1))
                                 .executes(this::adminHole)))
+                .then(Commands.literal("showfill")
+                        .executes(context -> adminShowFill(context, 15))
+                        .then(Commands.argument("seconds", IntegerArgumentType.integer(1, 120))
+                                .executes(context -> adminShowFill(context,
+                                        IntegerArgumentType.getInteger(context, "seconds")))))
                 .then(Commands.literal("check").executes(this::adminCheck))
                 .then(Commands.literal("info").executes(this::adminInfo))
                 .then(Commands.literal("save").executes(this::adminSave))
@@ -637,6 +646,61 @@ public final class PuttPuttCommand {
      * as floor. The second cause is a wall built level with the green instead of one block above it:
      * ground is sampled a block below the ball, walls at the ball's own layer.
      */
+    /**
+     * Paints the traced region so a builder can see the shape the fill found - and, when it leaked,
+     * see where it got out. Deliberately renders a leaked fill too: a cell count in chat says
+     * something went wrong, but only the picture says where.
+     */
+    private int adminShowFill(CommandContext<CommandSourceStack> context, int seconds) {
+        Player player = requirePlayer(context);
+        if (player == null) {
+            return 0;
+        }
+        Course course = selectedCourse(player);
+        if (course == null) {
+            return 0;
+        }
+        Hole hole = course.hole(session(player).currentHole()).orElse(null);
+        if (hole == null || hole.tee() == null) {
+            plugin.messages().send(player, "admin.fill-needs-tee");
+            return 0;
+        }
+        var world = plugin.getServer().getWorld(course.world());
+        if (world == null) {
+            plugin.messages().send(player, "course.unknown", "course", course.id());
+            return 0;
+        }
+
+        Vec3 tee = hole.tee();
+        int startY = (int) Math.floor(tee.y());
+        CourseRegion.Result region = CourseRegion.fill(
+                tee.blockX(), startY, tee.blockZ(),
+                WorldRegionScanner.openTest(world, plugin.config().surfaces(),
+                        hole.materialOverrides(), plugin.config().boundaryMaterialSet()),
+                plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
+                plugin.config().boundsMaxDrop());
+
+        if (region.bounds() == null) {
+            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            return 0;
+        }
+
+        BukkitTask previous = fillPreviews.remove(player.getUniqueId());
+        if (previous != null) {
+            previous.cancel();
+        }
+        fillPreviews.put(player.getUniqueId(),
+                FillVisualizer.show(plugin, player, region, startY, seconds));
+
+        plugin.messages().send(player,
+                region.exhausted() ? "admin.fill-preview-leaked" : "admin.fill-preview",
+                "hole", String.valueOf(hole.number()),
+                "cells", String.valueOf(region.size()),
+                "seconds", String.valueOf(seconds),
+                "material", String.join(", ", plugin.config().boundaryMaterials()));
+        return 1;
+    }
+
     private int adminCheck(CommandContext<CommandSourceStack> context) {
         Player player = requirePlayer(context);
         if (player == null) {

@@ -252,7 +252,12 @@ The usual cause of *"the ball rolls straight through my walls"* is a wall materi
 `material_map` at all — an unmapped block reads as plain green, so the ball treats it as floor. The
 second cause is a wall built level with the green instead of one block above it.
 
-All admin commands need `rcputtputt.admin`. Edits live in memory until `save`.
+All admin commands need `rcputtputt.admin`.
+
+Course edits are held in memory while you build and written out every `courses.autosave-seconds`
+(60 by default), on shutdown, and before a reload — so a `/stop` or a crash before you remember to
+type `save` does not cost you the hole. `/ppa save` still writes immediately. Only files whose
+content actually changed are touched.
 
 ### Setting bounds by tracing the fairway
 
@@ -286,6 +291,18 @@ Two older methods still work as fallbacks, in order, when no trace is possible:
 2. **A pos1/pos2 wand selection.**
 
 All three add `bounds.height-padding` of headroom above the floor so perimeter walls sit inside.
+
+### Seeing the fill
+
+```
+/ppa showfill [seconds]     # paints the traced region for you, 15s by default
+```
+
+A cell count in chat tells you something went wrong but not where. `showfill` draws the region the
+trace actually reached, in particles only you can see: green for fairway, **blue** for the perimeter
+where the fill stopped against a wall, **amber** for a cell it stepped down to, so terracing reads at
+a glance. A leaked fill is drawn too — in red — because that is the case you most need to look at:
+walk the red until it runs somewhere it should not, and that is your gap.
 
 ### The bounds are the course, literally
 
