@@ -12,9 +12,9 @@ class PhysicsConfigTest {
     @Test
     void rejectsAMaxVelocityThatWouldLetBallsTunnel() {
         assertThrows(IllegalArgumentException.class,
-                () -> new PhysicsConfig(1.0, 0.02, 0.25, 0.35));
+                () -> new PhysicsConfig(1.0, 0.02, 0.25, 0.35, 8));
         assertThrows(IllegalArgumentException.class,
-                () -> new PhysicsConfig(2.5, 0.02, 0.25, 0.35));
+                () -> new PhysicsConfig(2.5, 0.02, 0.25, 0.35, 8));
     }
 
     @Test

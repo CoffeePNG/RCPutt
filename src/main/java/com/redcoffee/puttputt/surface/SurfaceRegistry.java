@@ -58,6 +58,14 @@ public final class SurfaceRegistry {
             return defaultSurface;
         }
         String materialKey = key(material);
+        // Air is not a surface with no entry - it is the absence of one. Falling back to the
+        // default here is what let a ball roll out over open air as if it were fairway. An explicit
+        // mapping still wins, so a course can make air behave however it likes.
+        if (AIR.contains(materialKey)
+                && (courseOverrides == null || !courseOverrides.containsKey(materialKey))
+                && !materialMap.containsKey(materialKey)) {
+            return Surface.EMPTY;
+        }
         String surfaceId = null;
         if (courseOverrides != null && !courseOverrides.isEmpty()) {
             surfaceId = courseOverrides.get(materialKey);
@@ -71,6 +79,9 @@ public final class SurfaceRegistry {
         Surface surface = surfaces.get(key(surfaceId));
         return surface != null ? surface : defaultSurface;
     }
+
+    private static final java.util.Set<String> AIR =
+            java.util.Set.of("AIR", "CAVE_AIR", "VOID_AIR");
 
     private static String key(String raw) {
         return raw.trim().toUpperCase(Locale.ROOT);

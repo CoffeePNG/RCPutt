@@ -1,11 +1,16 @@
 # Bumped by the plugin when it migrates your file; do not edit by hand.
-config-version: 7
+config-version: 8
 
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
 # bumpers and pads are config entries rather than code.
 
 physics:
+  # How far the ball falls looking for ground when there is nothing beneath it. A ball that leaves
+  # the green over an unwalled bank drops until it finds something real - water below becomes the
+  # hazard it looks like. Nothing within this many blocks and the ball is gone: a stroke, and back
+  # to where it last rested. 0 makes any gap an immediate loss.
+  fall_depth: 8
   # Blocks per tick. MUST stay below 1.0: a ball that travels more than a block between samples can
   # step straight over a 1-block wall without ever testing it. This cap is the tunneling guard.
   max_velocity: 0.9

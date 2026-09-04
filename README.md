@@ -311,6 +311,21 @@ the work of four, so you turn the arrow rather than remembering which colour pus
 lives under `facing_boost` in `config.yml`, on the same scale as an impulse surface; add any other
 directional block there. A per-course material override still wins, so a course can repurpose it.
 
+### Falling off an edge
+
+A ball with nothing beneath it falls. It steps down looking for real ground, up to
+`physics.fall_depth` blocks (8), and takes whatever it lands on: water under a bank is the hazard it
+looks like, a lower terrace is ground. Nothing within reach and the ball is lost — a stroke, and back
+to where it last rested.
+
+This is why air is a surface of its own rather than an unmapped block. Unmapped materials fall back
+to plain green, so before this a ball leaving a green over an open bank kept rolling across thin air
+as though it were fairway, and never reached the water at all.
+
+Only the ground sample falls. The wall checks read at the ball's own height and ask only whether
+something is in the way — if they fell too, a ball passing a pit would bounce off whatever lined the
+bottom of it.
+
 ### Marking an edge with no wall
 
 Not every boundary wants a wall you can see. A bank that falls away into water is perfectly good

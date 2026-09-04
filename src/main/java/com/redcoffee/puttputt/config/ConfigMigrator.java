@@ -26,7 +26,7 @@ import org.bukkit.plugin.Plugin;
 public final class ConfigMigrator {
 
     /** Bump when a release adds keys or changes what an existing key means. */
-    public static final int CURRENT_VERSION = 7;
+    public static final int CURRENT_VERSION = 8;
 
     private static final String VERSION_KEY = "config-version";
 

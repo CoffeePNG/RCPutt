@@ -19,7 +19,15 @@ public enum SurfaceType {
      */
     CURRENT,
     /** The cup. Sinking is gated on speed, not just proximity. */
-    HOLE;
+    HOLE,
+    /**
+     * Nothing there at all - the ball has rolled out over a gap.
+     *
+     * <p>Distinct from {@link #ROLL} on purpose. Air used to fall back to the default surface, so a
+     * ball leaving a green over an open bank kept rolling on thin air as though it were fairway,
+     * and never reached the water below it.
+     */
+    EMPTY;
 
     public static SurfaceType parse(String raw, SurfaceType fallback) {
         if (raw == null || raw.isBlank()) {

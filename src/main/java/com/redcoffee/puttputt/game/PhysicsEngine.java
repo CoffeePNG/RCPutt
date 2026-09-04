@@ -197,7 +197,29 @@ public final class PhysicsEngine {
         return root >= 0.0 && root <= 1.0 ? root : null;
     }
 
+    /**
+     * The surface the ball is rolling on, following it down through empty space.
+     *
+     * <p>A ball that leaves the green over an unwalled bank has nothing beneath it. Reading that as
+     * ordinary ground - which is what an unmapped block used to do - let it roll out across thin
+     * air above the water instead of dropping into it. So the sample falls: it steps down until it
+     * finds something real, and takes that. Water below a bank is therefore the hazard it looks
+     * like, and a lower terrace is the ground it looks like.
+     *
+     * <p>Only the ground sample falls. The wall probes read at the ball's own height and ask only
+     * whether something is in the way; if they fell too, a ball passing a pit would bounce off
+     * whatever happened to line the bottom of it.
+     */
     private Surface groundSurface(Vec3 position, HoleContext hole) {
-        return hole.surfaceAt(position.blockX(), (int) Math.floor(position.y() - 0.5), position.blockZ());
+        int x = position.blockX();
+        int z = position.blockZ();
+        int y = (int) Math.floor(position.y() - 0.5);
+
+        Surface surface = hole.surfaceAt(x, y, z);
+        for (int dropped = 0; surface.isEmpty() && dropped < config.fallDepth(); dropped++) {
+            surface = hole.surfaceAt(x, --y, z);
+        }
+        // Still nothing within reach: the ball has left the course downwards.
+        return surface.isEmpty() ? Surface.voidFall(1) : surface;
     }
 }

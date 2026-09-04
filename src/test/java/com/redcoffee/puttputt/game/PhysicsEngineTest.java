@@ -1,6 +1,7 @@
 package com.redcoffee.puttputt.game;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -317,5 +318,64 @@ class PhysicsEngineTest {
         engine.step(striker, context(new Grid(), FAR_AWAY), List.of(target));
 
         assertTrue(target.atRest(), "a ball behind the striker must not be woken");
+    }
+
+    /**
+     * The bank case: fairway, then open air over water one level down, and no wall between them.
+     *
+     * <p>Air used to resolve to the default surface, so the ball rolled out across the gap as
+     * though it were green and never touched the water at all.
+     */
+    @org.junit.jupiter.api.Test
+    void aBallLeavingAnUnwalledBankFallsIntoTheWaterBelow() {
+        Surface water = new Surface("water", com.redcoffee.puttputt.surface.SurfaceType.HAZARD,
+                0.9, 0.0, 1, com.redcoffee.puttputt.surface.ResetMode.LAST_REST, null, false);
+        Surface green = Surface.fallback("green", 0.98);
+
+        // Fairway floor at y=64 for x<=4; beyond that, air at 64 and water at 63.
+        HoleContext hole = new HoleContext(
+                (x, y, z) -> {
+                    if (x <= 4) {
+                        return y == 64 ? green : Surface.EMPTY;
+                    }
+                    return y == 63 ? water : Surface.EMPTY;
+                },
+                new Vec3(100.5, 65.0, 0.5),
+                com.redcoffee.puttputt.util.Bounds.of(-500, 0, -500, 500, 200, 500),
+                Surface.EMPTY, TeleportLookup.NONE);
+
+        BallState ball = new BallState(new Vec3(0.5, 65.0, 0.5));
+        ball.wake(new Vec3(0.5, 0, 0));
+
+        StepOutcome outcome = null;
+        for (int tick = 0; tick < 60 && (outcome == null || outcome.result() != StepResult.HAZARD); tick++) {
+            outcome = engine.step(ball, hole, java.util.List.of());
+        }
+
+        assertNotNull(outcome);
+        assertEquals(StepResult.HAZARD, outcome.result(), "the ball must drown, not roll on over the gap");
+        assertEquals("water", outcome.surface().id());
+        assertEquals(1, outcome.penaltyStrokes());
+    }
+
+    /** With nothing within reach below, the ball is lost rather than floating on forever. */
+    @org.junit.jupiter.api.Test
+    void aBallOverABottomlessGapIsLost() {
+        HoleContext hole = new HoleContext(
+                (x, y, z) -> x <= 4 && y == 64 ? Surface.fallback("green", 0.98) : Surface.EMPTY,
+                new Vec3(100.5, 65.0, 0.5),
+                com.redcoffee.puttputt.util.Bounds.of(-500, 0, -500, 500, 200, 500),
+                Surface.EMPTY, TeleportLookup.NONE);
+
+        BallState ball = new BallState(new Vec3(0.5, 65.0, 0.5));
+        ball.wake(new Vec3(0.5, 0, 0));
+
+        StepOutcome outcome = null;
+        for (int tick = 0; tick < 60 && (outcome == null || outcome.result() != StepResult.HAZARD); tick++) {
+            outcome = engine.step(ball, hole, java.util.List.of());
+        }
+
+        assertEquals(StepResult.HAZARD, outcome.result());
+        assertEquals("void", outcome.surface().id());
     }
 }

@@ -88,7 +88,8 @@ public final class PluginConfig {
                     section.getDouble("max_velocity", defaults.maxVelocity()),
                     section.getDouble("rest_epsilon", defaults.restEpsilon()),
                     section.getDouble("max_sink_speed", defaults.maxSinkSpeed()),
-                    section.getDouble("sink_radius", defaults.sinkRadius()));
+                    section.getDouble("sink_radius", defaults.sinkRadius()),
+                    section.getInt("fall_depth", defaults.fallDepth()));
         } catch (IllegalArgumentException ex) {
             // A bad constant (usually max_velocity >= 1, which would let balls tunnel through walls)
             // must not start a server that silently plays wrong.

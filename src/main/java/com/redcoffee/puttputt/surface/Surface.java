@@ -14,6 +14,20 @@ public record Surface(
         Impulse impulse,
         boolean preventRest) {
 
+    /** Nothing underneath the ball. The engine falls through this looking for real ground. */
+    public static final Surface EMPTY =
+            new Surface("empty", SurfaceType.EMPTY, 1.0, 0.0, 0, ResetMode.LAST_REST, null, false);
+
+    /** Nothing underneath within reach either: the ball is gone. Costs a stroke, like any hazard. */
+    public static Surface voidFall(int penalty) {
+        return new Surface("void", SurfaceType.HAZARD, 1.0, 0.0, Math.max(0, penalty),
+                ResetMode.LAST_REST, null, false);
+    }
+
+    public boolean isEmpty() {
+        return type == SurfaceType.EMPTY;
+    }
+
     /** Used when a block has no registry entry at all - behaves like plain green. */
     public static Surface fallback(String id, double friction) {
         return new Surface(id, SurfaceType.ROLL, friction, 0.0, 0, ResetMode.LAST_REST, null, false);

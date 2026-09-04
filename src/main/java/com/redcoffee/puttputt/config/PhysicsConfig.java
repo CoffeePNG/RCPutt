@@ -15,9 +15,10 @@ public record PhysicsConfig(
         double maxVelocity,
         double restEpsilon,
         double maxSinkSpeed,
-        double sinkRadius) {
+        double sinkRadius,
+        int fallDepth) {
 
-    public static final PhysicsConfig DEFAULTS = new PhysicsConfig(0.9, 0.02, 0.25, 0.35);
+    public static final PhysicsConfig DEFAULTS = new PhysicsConfig(0.9, 0.02, 0.25, 0.35, 8);
 
     public PhysicsConfig {
         if (!(maxVelocity > 0.0) || maxVelocity >= 1.0) {
