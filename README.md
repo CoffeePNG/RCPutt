@@ -67,7 +67,15 @@ that order** — RCUI compiles against `rcplatform-api`, so RCPlatform has to co
 at Forgejo instead of the GitHub mirrors with `RCPLATFORM_URL` / `RCUI_URL` / `RCPARTIES_URL`, or
 on Windows the `-RcPlatformUrl` / `-RcUiUrl` / `-RcPartiesUrl` parameters.
 
-Each build is checked: if a dependency compiles but installs nothing, the script stops and names the
+Only RCParties' **API module** is built (`-pl rcparties-api -am`). Its plugin module pins an RCUI
+version of its own, which need not match the RCUI you have, and nothing here consumes that module.
+
+Each build is checked against the exact version RCPuttPutt's pom asks for. If your clone of a
+dependency builds a different version — RCUI in particular moves — the script says so, lists what
+is present, and tells you to pass `-Drcui.version=<yours>` rather than edit any file. The three
+versions are `rcui.version`, `rcplatform.version` and `rcparties.version` properties in `pom.xml`.
+
+If a dependency compiles but installs nothing, the script stops and names the
 artifact, rather than letting the next dependency fail on a missing jar several confusing steps
 later. It also clears Maven's cached resolution failures first — a `mvn package` run *before* the
 dependencies were installed records "not found" for them, and that cached miss can survive the

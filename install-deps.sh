@@ -40,6 +40,41 @@ artifact_path() {
     esac
 }
 
+artifact_id() {
+    case "$1" in
+        rcplatform) echo "rcplatform-api" ;;
+        rcui)       echo "RCUI" ;;
+        rcparties)  echo "rcparties-api" ;;
+        *)          echo "" ;;
+    esac
+}
+
+version_key() {
+    case "$1" in
+        rcplatform) echo "rcplatform.version" ;;
+        rcui)       echo "rcui.version" ;;
+        rcparties)  echo "rcparties.version" ;;
+        *)          echo "" ;;
+    esac
+}
+
+# The version comes from RCPuttPutt's own pom, so the check answers the question that actually
+# matters: will the plugin build against what is now installed?
+pom_version() {
+    local key="$1"
+    sed -n "s|.*<$key>\(.*\)</$key>.*|\1|p" "$(dirname "$0")/pom.xml" 2>/dev/null | head -1
+}
+
+# RCPuttPutt needs only RCParties' API module. Building the whole reactor also builds its plugin,
+# which pulls in its own pinned RCUI - a version that need not match the RCUI you have, and whose
+# failure would stop the install for a module nothing here consumes.
+module_args() {
+    case "$1" in
+        rcparties) echo "-pl rcparties-api -am" ;;
+        *)         echo "" ;;
+    esac
+}
+
 # Drops Maven's cached "could not find this artifact" markers for the RC coordinates.
 #
 # A plain `mvn package` before these are installed fails, and Maven remembers the miss - that is the
@@ -64,19 +99,35 @@ clear_resolver_cache() {
 # A build that "succeeds" without producing the artifact leaves the next dependency failing on a
 # missing jar, several confusing steps away from the cause. Check here instead.
 assert_installed() {
-    local name="$1" relative
+    local name="$1" relative key wanted
     relative="$(artifact_path "$name")"
-    [ -n "$relative" ] || return 0
-    local dir="$LOCAL_REPO/$relative" jar
-    jar="$(find "$dir" -name '*.jar' -type f 2>/dev/null | head -1)"
-    if [ -z "$jar" ]; then
-        echo >&2
-        echo "install-deps.sh: $name built, but nothing was installed to $dir" >&2
-        echo "  Every later build will fail on this artifact. Check the Maven output above:" >&2
-        echo "  a module that was skipped, or a build that stopped before its install phase." >&2
-        exit 1
+    key="$(version_key "$name")"
+    [ -n "$relative" ] && [ -n "$key" ] || return 0
+    wanted="$(pom_version "$key")"
+    [ -n "$wanted" ] || return 0
+
+    # The EXACT version, not merely some jar in the tree: an old build of a different version
+    # sitting in the local repository would otherwise read as success and push the real failure
+    # downstream, which is precisely the confusion this check exists to prevent.
+    local jar="$LOCAL_REPO/$relative/$wanted/$(artifact_id "$name")-$wanted.jar"
+    if [ -f "$jar" ]; then
+        echo "    installed: $jar"
+        return 0
     fi
-    echo "    installed: $jar"
+
+    local present
+    present="$(ls -1 "$LOCAL_REPO/$relative" 2>/dev/null | tr '\n' ' ')"
+    [ -n "$present" ] || present="(nothing)"
+    echo >&2
+    echo "install-deps.sh: $name did not install the version RCPuttPutt asks for." >&2
+    echo "  wanted:  $(artifact_id "$name") $wanted" >&2
+    echo "  present: $present" >&2
+    echo >&2
+    echo "  Your clone of $name builds a different version. Either point RCPuttPutt at the one" >&2
+    echo "  you have, which needs no edit to any file:" >&2
+    echo "      ./build.sh package -D$key=<the version above>" >&2
+    echo "  or check out the revision of $name that builds $wanted." >&2
+    exit 1
 }
 
 build() {
@@ -105,7 +156,8 @@ build() {
     # paper-api and a dozen modules) sits silent for minutes and looks like a hang. -B keeps the
     # output non-interactive and free of ANSI progress bars.
     echo "==> $name: mvn install (first run downloads a lot; this can take several minutes)"
-    (cd "$dir" && mvn -B install -DskipTests)
+    # shellcheck disable=SC2046  # module_args is a deliberate word-split of Maven flags
+    (cd "$dir" && mvn -B install -DskipTests $(module_args "$name"))
     assert_installed "$name"
 }
 

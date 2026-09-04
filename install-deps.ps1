@@ -59,12 +59,28 @@ if ($LASTEXITCODE -ne 0 -or -not $jdk25) {
 $env:JAVA_HOME = $jdk25.Trim()
 Write-Host "Using JAVA_HOME=$env:JAVA_HOME"
 
-# Where each dependency lands, so a build can be checked rather than assumed.
-$ArtifactPaths = @{
-    'rcplatform' = 'net\republicraft\platform\rcplatform-api'
-    'rcui'       = 'net\republicraft\RCUI'
-    'rcparties'  = 'gg\rc\rcparties-api'
+# Where each dependency lands, so a build can be checked rather than assumed. The version comes
+# from RCPuttPutt's own pom, so the check answers the question that actually matters: will the
+# plugin build against what is now installed?
+$PomVersions = @{}
+$pomPath = Join-Path $PSScriptRoot 'pom.xml'
+if (Test-Path $pomPath) {
+    $pomXml = [xml](Get-Content $pomPath -Raw)
+    foreach ($key in 'rcui.version', 'rcplatform.version', 'rcparties.version') {
+        $PomVersions[$key] = $pomXml.project.properties.$key
+    }
 }
+
+$ArtifactPaths = @{
+    'rcplatform' = @{ Path = 'net\republicraft\platform\rcplatform-api'; Key = 'rcplatform.version'; Artifact = 'rcplatform-api' }
+    'rcui'       = @{ Path = 'net\republicraft\RCUI';                     Key = 'rcui.version';       Artifact = 'RCUI' }
+    'rcparties'  = @{ Path = 'gg\rc\rcparties-api';                       Key = 'rcparties.version';  Artifact = 'rcparties-api' }
+}
+
+# RCPuttPutt needs only RCParties' API module. Building the whole reactor also builds its plugin,
+# which pulls in its own pinned RCUI - a version that need not match the RCUI you have, and whose
+# failure would stop the install for a module nothing here consumes.
+$ModuleArgs = @{ 'rcparties' = @('-pl', 'rcparties-api', '-am') }
 
 <#
 Removes Maven's cached "could not find this artifact" markers for the RC coordinates.
@@ -96,22 +112,35 @@ function Clear-ResolverCache {
 function Assert-Installed {
     param([string] $Name)
 
-    $relative = $ArtifactPaths[$Name]
-    if (-not $relative) { return }
-    $dir = Join-Path $LocalRepo $relative
-    $jar = if (Test-Path $dir) {
-        Get-ChildItem $dir -Recurse -Filter '*.jar' -File -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-    } else { $null }
+    $spec = $ArtifactPaths[$Name]
+    if (-not $spec) { return }
+    $wanted = $PomVersions[$spec.Key]
+    if (-not $wanted) { return }
 
-    if (-not $jar) {
-        Write-Host ""
-        Write-Host "install-deps.ps1: $Name built, but nothing was installed to $dir" -ForegroundColor Red
-        Write-Host "  Every later build will fail on this artifact. Check the Maven output above:"
-        Write-Host "  a module that was skipped, or a build that stopped before its install phase."
-        exit 1
+    # The EXACT version, not merely some jar in the tree: an old build of a different version
+    # sitting in the local repository would otherwise read as success and push the real failure
+    # downstream, which is precisely the confusion this check exists to prevent.
+    $jar = Join-Path (Join-Path (Join-Path $LocalRepo $spec.Path) $wanted) "$($spec.Artifact)-$wanted.jar"
+    if (Test-Path $jar) {
+        Write-Host "    installed: $jar" -ForegroundColor DarkGray
+        return
     }
-    Write-Host "    installed: $($jar.FullName)" -ForegroundColor DarkGray
+
+    $dir = Join-Path $LocalRepo $spec.Path
+    $others = if (Test-Path $dir) {
+        (Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name) -join ', '
+    } else { '(nothing)' }
+
+    Write-Host ""
+    Write-Host "install-deps.ps1: $Name did not install the version RCPuttPutt asks for." -ForegroundColor Red
+    Write-Host "  wanted:  $($spec.Artifact) $wanted"
+    Write-Host "  present: $others"
+    Write-Host ""
+    Write-Host "  Your clone of $Name builds a different version. Either point RCPuttPutt at the one"
+    Write-Host "  you have, which needs no edit to any file:"
+    Write-Host "      .\build.ps1 package -D$($spec.Key)=<the version above>" -ForegroundColor Cyan
+    Write-Host "  or check out the revision of $Name that builds $wanted."
+    exit 1
 }
 
 function Build-Dependency {
@@ -145,9 +174,12 @@ function Build-Dependency {
     # paper-api and a dozen modules) sits silent for minutes and looks like a hang. -B keeps the
     # output non-interactive and free of ANSI progress bars.
     Write-Host "==> $Name`: mvn install (first run downloads a lot; this can take several minutes)"
+    $extra = @()
+    if ($ModuleArgs.ContainsKey($Name)) { $extra = $ModuleArgs[$Name] }
+
     Push-Location $dir
     try {
-        & $mvn.Source -B install -DskipTests
+        & $mvn.Source -B install -DskipTests @extra
         if ($LASTEXITCODE -ne 0) {
             Write-Host ""
             Write-Host "install-deps.ps1: $Name failed to build (see the Maven output above)." -ForegroundColor Red
