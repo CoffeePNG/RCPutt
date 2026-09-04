@@ -19,6 +19,42 @@ public final class WorldRegionScanner {
      * an explicit boundary material (slabs, say), any block mapped to a wall surface, and a missing
      * floor - so an unfenced drop bounds the course just as a wall does.
      */
+    /**
+     * Why a cell is not playable, in the words a builder can act on.
+     *
+     * <p>The trace failing on the tee is reported to a builder who is standing on what looks like
+     * perfectly ordinary ground, so "not on open ground" on its own invites disbelief rather than a
+     * fix. This names the block and the rule that rejected it.
+     *
+     * @return null when the cell is open
+     */
+    public static String closureReason(World world, SurfaceRegistry registry,
+                                       Map<String, String> overrides,
+                                       Set<Material> boundaryMaterials,
+                                       int x, int ballY, int z) {
+        if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+            return "that chunk is not loaded";
+        }
+        Material atBall = world.getBlockAt(x, ballY, z).getType();
+        if (boundaryMaterials.contains(atBall)) {
+            return atBall.name() + " at ball height is a boundary material";
+        }
+        if (registry.forMaterial(atBall.name(), overrides).isWall()) {
+            return atBall.name() + " at ball height is mapped to the wall surface";
+        }
+        if (atBall.isSolid()) {
+            return atBall.name() + " at ball height is solid";
+        }
+        Material floor = world.getBlockAt(x, ballY - 1, z).getType();
+        if (boundaryMaterials.contains(floor)) {
+            return "the floor (" + floor.name() + ") is a boundary material";
+        }
+        if (floor.isAir()) {
+            return "there is no floor below - nothing to roll on";
+        }
+        return null;
+    }
+
     public static CourseRegion.OpenTest openTest(World world, SurfaceRegistry registry,
                                                  Map<String, String> overrides,
                                                  Set<Material> boundaryMaterials) {

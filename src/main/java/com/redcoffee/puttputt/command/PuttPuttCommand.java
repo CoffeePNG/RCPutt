@@ -465,10 +465,19 @@ public final class PuttPuttCommand {
 
         // The stored tee is not reliably on the ball's plane, so resolve the height rather than
         // trusting it: one block out in either direction would otherwise return nothing at all.
-        int startY = CourseRegion.snapToOpen(tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(),
-                open, plugin.config().boundsStartSearch());
+        int teeY = (int) Math.floor(tee.y());
+        int search = plugin.config().boundsStartSearch();
+        int startY = CourseRegion.snapToOpen(tee.blockX(), teeY, tee.blockZ(), open, search);
         if (startY == CourseRegion.NO_START) {
-            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            // Say what was actually looked at. A builder standing on ordinary ground has no way to
+            // guess whether the trace disagreed about the block, the height, or even the world.
+            String reason = WorldRegionScanner.closureReason(world, plugin.config().surfaces(),
+                    hole.materialOverrides(), boundary, tee.blockX(), teeY, tee.blockZ());
+            plugin.messages().send(player, "admin.bounds-tee-blocked",
+                    "pos", tee.blockX() + ", " + teeY + ", " + tee.blockZ(),
+                    "world", world.getName(),
+                    "range", (teeY - search) + " to " + (teeY + search),
+                    "reason", reason == null ? "unknown" : reason);
             return false;
         }
 
@@ -478,7 +487,11 @@ public final class PuttPuttCommand {
                 plugin.config().boundsMaxDrop());
 
         if (region.bounds() == null) {
-            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            plugin.messages().send(player, "admin.bounds-tee-blocked",
+                    "pos", tee.blockX() + ", " + startY + ", " + tee.blockZ(),
+                    "world", world.getName(),
+                    "range", String.valueOf(startY),
+                    "reason", "the trace found nothing to fill from there");
             return false;
         }
         if (region.exhausted()) {
@@ -687,10 +700,18 @@ public final class PuttPuttCommand {
         Vec3 tee = hole.tee();
         CourseRegion.OpenTest open = WorldRegionScanner.openTest(world, plugin.config().surfaces(),
                 hole.materialOverrides(), plugin.config().boundaryMaterialSet());
-        int startY = CourseRegion.snapToOpen(tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(),
-                open, plugin.config().boundsStartSearch());
+        int teeY = (int) Math.floor(tee.y());
+        int search = plugin.config().boundsStartSearch();
+        int startY = CourseRegion.snapToOpen(tee.blockX(), teeY, tee.blockZ(), open, search);
         if (startY == CourseRegion.NO_START) {
-            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            String reason = WorldRegionScanner.closureReason(world, plugin.config().surfaces(),
+                    hole.materialOverrides(), plugin.config().boundaryMaterialSet(),
+                    tee.blockX(), teeY, tee.blockZ());
+            plugin.messages().send(player, "admin.bounds-tee-blocked",
+                    "pos", tee.blockX() + ", " + teeY + ", " + tee.blockZ(),
+                    "world", world.getName(),
+                    "range", (teeY - search) + " to " + (teeY + search),
+                    "reason", reason == null ? "unknown" : reason);
             return 0;
         }
         CourseRegion.Result region = CourseRegion.fill(
