@@ -304,6 +304,13 @@ anything solid at ball height, and at any cell with no floor beneath it. The res
 fairway's real shape: an L, a spiral, a horseshoe. Only the enclosing box is stored as the read
 window, but the traced cell set is what proves the hole is sealed.
 
+### Blocks that push the way they face
+
+`MAGENTA_GLAZED_TERRACOTTA` boosts a ball in whatever direction it was placed — one material doing
+the work of four, so you turn the arrow rather than remembering which colour pushes north. Strength
+lives under `facing_boost` in `config.yml`, on the same scale as an impulse surface; add any other
+directional block there. A per-course material override still wins, so a course can repurpose it.
+
 ### Marking an edge with no wall
 
 Not every boundary wants a wall you can see. A bank that falls away into water is perfectly good

@@ -1,5 +1,5 @@
 # Bumped by the plugin when it migrates your file; do not edit by hand.
-config-version: 6
+config-version: 7
 
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
@@ -68,6 +68,15 @@ surfaces:
       strength: 0.12
     preventRest: true
 
+# BLOCKS THAT PUSH THE WAY THEY FACE.
+#
+# One material doing the work of four: the direction comes from how the block was placed, so a
+# builder turns the arrow rather than remembering which colour pushes north. Value is the push
+# strength, same scale as an impulse surface; 0 disables an entry. A per-course material override
+# still wins, so a course can repurpose the block.
+facing_boost:
+  MAGENTA_GLAZED_TERRACOTTA: 0.35
+
 # Block material -> surface id. Per-course overrides live in the course file and win over this map.
 # Anything unmapped rolls like plain green.
 material_map:
@@ -103,7 +112,8 @@ shot-clock:
   timeout-penalty: 1
   max-consecutive-timeouts: 3   # after this many forfeits in a row, the player is capped out
 
-# Hard cap so one player cannot stall a hole forever.
+# Hard cap so one player cannot stall a hole forever. Set to 0 to remove it entirely and let a hole
+# be played out however many strokes it takes - the shot clock still moves the turn along.
 max-strokes-per-hole: 10
 
 power-meter:

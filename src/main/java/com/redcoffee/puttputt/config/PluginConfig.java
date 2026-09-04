@@ -38,6 +38,7 @@ public final class PluginConfig {
     private int boundsStartSearch = 3;
     private int boundsScanRadius = 64;
     private int boundsHeightPadding = 4;
+    private java.util.Map<String, Double> facingBoosts = java.util.Map.of();
     private int courseAutosaveSeconds = 60;
     private boolean economyEnabled;
     private int leaderboardSize = 10;
@@ -70,6 +71,7 @@ public final class PluginConfig {
         boundsStartSearch = Math.max(0, config.getInt("bounds.start-search", 3));
         boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
         boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
+        readFacingBoosts(config.getConfigurationSection("facing_boost"));
         courseAutosaveSeconds = Math.max(1, config.getInt("courses.autosave-seconds", 60));
         economyEnabled = config.getBoolean("economy.enabled", false);
         leaderboardSize = Math.max(1, config.getInt("leaderboard.size", 10));
@@ -292,6 +294,29 @@ public final class PluginConfig {
         return wall != null && wall.isWall()
                 ? wall
                 : new Surface("bounds", SurfaceType.WALL, 1.0, 0.70, 0, ResetMode.LAST_REST, null, false);
+    }
+
+    private void readFacingBoosts(org.bukkit.configuration.ConfigurationSection section) {
+        java.util.Map<String, Double> out = new java.util.LinkedHashMap<>();
+        if (section != null) {
+            for (String key : section.getKeys(false)) {
+                double strength = section.getDouble(key, 0.0);
+                if (strength == 0.0) {
+                    continue;
+                }
+                if (org.bukkit.Material.matchMaterial(key) == null) {
+                    logger.warning("Unknown facing_boost material '" + key + "'; ignoring it.");
+                    continue;
+                }
+                out.put(key.trim().toUpperCase(java.util.Locale.ROOT), strength);
+            }
+        }
+        facingBoosts = java.util.Map.copyOf(out);
+    }
+
+    /** Materials that push a ball the way the block faces, mapped to their push strength. */
+    public java.util.Map<String, Double> facingBoosts() {
+        return facingBoosts;
     }
 
     /** How often unsaved course edits are written out, in seconds. */

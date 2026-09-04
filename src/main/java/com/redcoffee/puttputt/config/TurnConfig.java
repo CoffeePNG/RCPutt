@@ -7,7 +7,7 @@ package com.redcoffee.puttputt.config;
  * @param shotClockSeconds        time a player has to putt before forfeiting the turn
  * @param timeoutPenalty          strokes added when the clock expires
  * @param maxConsecutiveTimeouts  forfeits in a row before the player is auto-finished on the hole
- * @param maxStrokesPerHole       hard cap so one player cannot stall a hole forever
+ * @param maxStrokesPerHole       hard cap so one player cannot stall a hole forever; 0 removes it
  */
 public record TurnConfig(
         TurnOrderMode mode,
@@ -18,12 +18,17 @@ public record TurnConfig(
 
     public static final TurnConfig DEFAULTS = new TurnConfig(TurnOrderMode.ASCENDING, 30, 1, 3, 10);
 
+    /** True when a hole runs until the ball is sunk, however many strokes that takes. */
+    public boolean strokesUncapped() {
+        return maxStrokesPerHole == 0;
+    }
+
     public TurnConfig {
         if (shotClockSeconds <= 0) {
             throw new IllegalArgumentException("shot-clock seconds must be positive, got " + shotClockSeconds);
         }
-        if (maxStrokesPerHole <= 0) {
-            throw new IllegalArgumentException("max-strokes-per-hole must be positive, got " + maxStrokesPerHole);
+        if (maxStrokesPerHole < 0) {
+            throw new IllegalArgumentException("max-strokes-per-hole cannot be negative, got " + maxStrokesPerHole);
         }
         if (maxConsecutiveTimeouts <= 0) {
             throw new IllegalArgumentException(

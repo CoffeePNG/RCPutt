@@ -453,7 +453,8 @@ public final class RoundManager {
     /** Called once every ball has stopped: apply the stroke cap, then hand over the turn. */
     private void afterBallsSettled(Round round) {
         int cap = plugin.config().turns().maxStrokesPerHole();
-        for (UUID playerId : round.players()) {
+        // 0 means play the hole out however long it takes.
+        for (UUID playerId : cap == 0 ? java.util.List.<UUID>of() : round.players()) {
             if (round.hasFinishedThisHole(playerId)) {
                 continue;
             }
@@ -493,7 +494,10 @@ public final class RoundManager {
         }
         // Repeated forfeits mean an AFK player; cap them out so the hole can finish.
         if (card.consecutiveTimeouts() >= plugin.config().turns().maxConsecutiveTimeouts()) {
-            card.addStrokes(Math.max(0, plugin.config().turns().maxStrokesPerHole() - card.currentStrokes()));
+            int forfeitTo = plugin.config().turns().maxStrokesPerHole();
+            if (forfeitTo > 0) {
+                card.addStrokes(Math.max(0, forfeitTo - card.currentStrokes()));
+            }
             round.markFinishedThisHole(playerId);
             Ball ball = round.ball(playerId);
             if (ball != null) {
@@ -517,7 +521,8 @@ public final class RoundManager {
     private HoleContext contextFor(Round round, Hole hole) {
         SurfaceSampler sampler = new WorldSurfaceSampler(
                 plugin.getServer().getWorld(round.course().world()),
-                plugin.config().surfaces(), hole.materialOverrides());
+                plugin.config().surfaces(), hole.materialOverrides(),
+                plugin.config().facingBoosts());
         return new HoleContext(sampler, hole.cup(), hole.bounds(),
                 plugin.config().outsideBoundsSurface(), hole.teleportLookup());
     }
