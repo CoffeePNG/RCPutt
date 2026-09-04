@@ -31,13 +31,17 @@ Implements **RC-SPEC-PUTTPUTT-001 v2**, built to **RC-DEV-STD-001**.
 The plugin targets Java 25, which may not be your shell default:
 
 ```sh
-./build.sh package        # finds a JDK 25 and builds with it
+./build.sh package        # macOS / Linux
+```
+```powershell
+.\build.ps1 package       # Windows
 ```
 
-`build.sh` locates a JDK 25 rather than assuming one: an already-correct `JAVA_HOME`, then
-`/usr/libexec/java_home -v 25` on macOS, then the usual Linux locations. If it cannot find one it
-says so and tells you how to install it. Force a specific JDK with
-`JAVA_HOME_25=/path/to/jdk-25 ./build.sh package`.
+These locate a JDK 25 rather than assuming one: an already-correct `JAVA_HOME`, then
+`/usr/libexec/java_home -v 25` on macOS and the usual Linux locations, or on Windows the install
+roots the common JDK vendors use. If nothing is found they say so and tell you how to install one.
+Force a specific JDK with `JAVA_HOME_25=/path/to/jdk-25 ./build.sh package`, or on Windows
+`$env:JAVA_HOME_25 = 'C:\path\to\jdk-25'; .\build.ps1 package`.
 
 The jar lands in `target/RCPuttPutt-<version>.jar`. SQLite is not shaded: `paper-plugin.yml` has no
 `libraries:` key, so a `PluginLoader` hands Paper the Maven coordinate and it resolves at load time.
@@ -49,16 +53,31 @@ None of the RC dependencies are published to a public Maven repository, so a pla
 `rcparties-api`). Build them into your local `~/.m2` first:
 
 ```sh
-./install-deps.sh
+./install-deps.sh         # macOS / Linux
+```
+```powershell
+.\install-deps.ps1        # Windows
 ```
 
+**`mvn package` on its own will not work until you have run this.** That is what the
+`Could not find artifact` errors mean — nothing is wrong with your checkout.
+
 It clones (or reuses) RCPlatform, RCUI and RCParties beside this repo and `mvn install`s them **in
-that order** — RCUI compiles against `rcplatform-api`, so RCPlatform has to come first. Override
-`RCPLATFORM_URL` / `RCUI_URL` / `RCPARTIES_URL` to pull from Forgejo instead of the GitHub mirrors.
+that order** — RCUI compiles against `rcplatform-api`, so RCPlatform has to come first. Point them
+at Forgejo instead of the GitHub mirrors with `RCPLATFORM_URL` / `RCUI_URL` / `RCPARTIES_URL`, or
+on Windows the `-RcPlatformUrl` / `-RcUiUrl` / `-RcPartiesUrl` parameters.
+
+An existing clone is built as it stands and never pulled — silently updating your checkout would be
+worse than building what you have — but the script prints the branch, commit and whether it is
+dirty, so a stale artifact is obvious here rather than three confusing steps later.
 
 **RCParties is branched per target** and both branches publish the same coordinates, so whichever
 you build *last* is what lands in `.m2`. The script defaults to the 26.2 branch
 (`claude/running-agentic-i3mb79`); its API is Java 25 bytecode and will not load on Java 21.
+Override it with `RCPARTIES_BRANCH=...` or, on Windows, `-RcPartiesBranch ...`.
+
+> On Windows you may need to allow the scripts to run once:
+> `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass`
 
 ## How it plays
 
