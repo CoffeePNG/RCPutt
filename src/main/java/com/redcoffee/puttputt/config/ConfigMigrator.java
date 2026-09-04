@@ -26,7 +26,7 @@ import org.bukkit.plugin.Plugin;
 public final class ConfigMigrator {
 
     /** Bump when a release adds keys or changes what an existing key means. */
-    public static final int CURRENT_VERSION = 5;
+    public static final int CURRENT_VERSION = 6;
 
     private static final String VERSION_KEY = "config-version";
 
@@ -90,6 +90,22 @@ public final class ConfigMigrator {
         // v4 -> v5: BARRIER and LIGHT map to the wall surface, so an edge can be marked without
         // building a visible wall. The packaged-defaults merge above adds them; this step exists so
         // servers already on v4 run that merge at all.
+
+        // v5 -> v6: LIGHT and BARRIER become trace separators. The defaults merge above only adds
+        // absent keys, and an existing server already has a boundary-materials list, so these have
+        // to be appended by hand. Appended, never replaced: the operator's own materials stay.
+        if (from < 6) {
+            List<String> boundary = new ArrayList<>(config.getStringList("bounds.boundary-materials"));
+            for (String separator : List.of("LIGHT", "BARRIER")) {
+                if (boundary.stream().noneMatch(separator::equalsIgnoreCase)) {
+                    boundary.add(separator);
+                    changes.add("bounds.boundary-materials: added " + separator);
+                }
+            }
+            if (!boundary.isEmpty()) {
+                config.set("bounds.boundary-materials", boundary);
+            }
+        }
 
         config.set(VERSION_KEY, CURRENT_VERSION);
         plugin.saveConfig();

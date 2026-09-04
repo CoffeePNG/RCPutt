@@ -312,13 +312,18 @@ across the water and the ball rolls off. Two materials mark that edge without bu
 
 | Block | Invisible | Players pass through | Use for |
 |---|---|---|---|
-| `BARRIER` | yes | no | a drop you also want people kept away from |
-| `LIGHT` | yes | **yes** | an edge where a wall would be in the way |
+| `LIGHT` | yes | **yes** | an open bank — the one to reach for |
+| `BARRIER` | yes | no | an edge you also want people kept off |
 
-Place either at the ball's own height along the lip. Both are mapped to the `wall` surface, so they
-stop the trace *and* bounce the ball — a separator that only stopped the trace would leave the ball
-rolling out of a hole whose bounds ended behind it. Any material mapped to `wall` in `material_map`
-behaves this way; these two are simply the ones you cannot see.
+Place either at the ball's own height along the lip. They are **separators, not walls**: neither is
+mapped to the `wall` surface, so the ball rolls straight over one and into whatever lies beyond —
+water still drowns it, a drop still drops it. A separator marks where the *course* ends, not where
+the ball bounces. (For an edge that should bounce, map a material to `wall` in `material_map`
+instead; `SMOOTH_STONE` is set up that way already.)
+
+Balls sample one cell beyond the bounds, so water right at the lip reads as the hazard it is. If a
+hard shot can carry several blocks out over open water, set `bounds.confine: false` and anything
+leaving the region takes the out-of-bounds stroke instead.
 
 The trace starts from the tee, but does not trust its exact height. `/ppa settee` records your feet,
 so standing on a slab, a stair or a carpet stores a tee half a block high, and a tee set while stood

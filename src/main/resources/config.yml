@@ -1,5 +1,5 @@
 # Bumped by the plugin when it migrates your file; do not edit by hand.
-config-version: 5
+config-version: 6
 
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
@@ -76,19 +76,13 @@ material_map:
   SAND: sand
   BLUE_ICE: ice
   SMOOTH_STONE: wall
-  # INVISIBLE SEPARATORS. Not every edge of a course wants a wall you can see: a bank that falls
-  # away into water reads as perfectly good fairway, so the trace spills over it and the ball rolls
-  # off. Both of these mark an edge without building one.
-  #   BARRIER - invisible, and solid: players cannot walk through it either. Good along a drop.
-  #   LIGHT   - invisible and walk-through, so builders and players pass freely while the ball
-  #             still bounces and the trace still stops. Good where a wall would be in the way.
-  BARRIER: wall
-  LIGHT: wall
   WATER: water
   LIGHT_BLUE_CONCRETE: booster_north
   ORANGE_CONCRETE: booster_east
-  CYAN_CONCRETE: river_east
-  LIGHT_GRAY_CONCRETE: river_north
+  # Currents are switched off for now: nothing pushes a ball along. The river surfaces are still
+  # defined above, so re-enabling them is a matter of mapping a material back to one.
+  #   CYAN_CONCRETE: river_east
+  #   LIGHT_GRAY_CONCRETE: river_north
 
 # Ball-to-ball collision. Affordable because play is turn-based: only one ball is ever under power,
 # so a strike resolves against resting balls rather than an n-body simulation.
@@ -136,8 +130,14 @@ bounds:
   #
   # Anything already mapped to a wall surface also stops the trace, as does a missing floor, so an
   # unfenced drop bounds a hole just as a wall does.
+  # These stop the trace. They are NOT walls: nothing here is mapped to the wall surface, so the
+  # ball rolls straight over one and into whatever is beyond - water still drowns it, a drop still
+  # drops it. A separator marks where the COURSE ends, not where the ball bounces.
+  #   LIGHT   - invisible and walk-through. The one to reach for on an open bank.
+  #   BARRIER - invisible but solid, so players cannot cross it either.
   boundary-materials:
     - SMOOTH_STONE_SLAB
+    - LIGHT
     - BARRIER
   max-cells: 40000       # safety limit; hitting it means a gap in the boundary, not a big hole
   # How far the trace follows a drop. A fairway that falls over a ledge into a lower green is still
