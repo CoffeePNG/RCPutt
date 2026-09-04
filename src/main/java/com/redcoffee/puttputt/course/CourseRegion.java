@@ -119,6 +119,40 @@ public final class CourseRegion {
         return new Result(cells, bounds, exhausted);
     }
 
+    /** Returned by {@link #snapToOpen} when no playable height was found near the start. */
+    public static final int NO_START = Integer.MIN_VALUE;
+
+    /**
+     * Finds the playable height at a column, searching outward from {@code aroundY}.
+     *
+     * <p>The fill needs to begin on the ball's own plane - the air sitting on the fairway - and a
+     * stored tee is not reliably on it. {@code /settee} records the player's feet, so standing on a
+     * slab, a stair or a carpet puts the tee half a block high and flooring it lands on the floor
+     * block itself; standing on the boundary wall puts it a block above. Either way the first cell
+     * reads as closed and the whole trace returns nothing, whatever the boundary material is, which
+     * looks exactly like bounds being broken.
+     *
+     * <p>So the height is resolved rather than trusted. Ties go upward: at a ledge, the higher of
+     * two playable planes is the one the tee was placed on.
+     *
+     * @param radius how far above and below {@code aroundY} to look
+     * @return the height to start from, or {@link #NO_START} if this column is not playable at all
+     */
+    public static int snapToOpen(int x, int aroundY, int z, OpenTest open, int radius) {
+        if (open.isOpen(x, aroundY, z)) {
+            return aroundY;
+        }
+        for (int offset = 1; offset <= Math.max(0, radius); offset++) {
+            if (open.isOpen(x, aroundY + offset, z)) {
+                return aroundY + offset;
+            }
+            if (open.isOpen(x, aroundY - offset, z)) {
+                return aroundY - offset;
+            }
+        }
+        return NO_START;
+    }
+
     private static final int NO_LANDING = Integer.MIN_VALUE;
 
     /**

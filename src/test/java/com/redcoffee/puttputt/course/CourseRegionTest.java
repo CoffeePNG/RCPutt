@@ -126,6 +126,68 @@ class CourseRegionTest {
         assertEquals(1, result.size(), "the wall ends the hole even though it is short");
     }
 
+    /**
+     * A fairway with a real floor: open only on the ball plane at Y, solid below, air above. This is
+     * what the world looks like to the scanner, and the reason a start height one block out returns
+     * nothing at all.
+     */
+    private static CourseRegion.OpenTest oneOpenPlane(int planeY) {
+        return (x, y, z) -> y == planeY && x >= 0 && x <= 4 && z >= 0 && z <= 4;
+    }
+
+    /** The bug behind "bounds don't work whatever material I use": one block out yields nothing. */
+    @Test
+    void aStartHeightOneBlockOutTracesNothing() {
+        CourseRegion.Result low = CourseRegion.fill(2, Y - 1, 2, oneOpenPlane(Y),
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 0);
+        CourseRegion.Result high = CourseRegion.fill(2, Y + 1, 2, oneOpenPlane(Y),
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 0);
+
+        assertEquals(0, low.size());
+        assertNull(low.bounds(), "and no bounds at all, not merely a small region");
+        assertEquals(0, high.size());
+        assertNull(high.bounds());
+    }
+
+    /** So the height is resolved first. A tee on the floor block snaps up onto the ball plane. */
+    @Test
+    void snapFindsThePlaneFromBelow() {
+        assertEquals(Y, CourseRegion.snapToOpen(2, Y - 1, 2, oneOpenPlane(Y), 3));
+    }
+
+    /** And a tee set while stood on the boundary wall snaps back down onto it. */
+    @Test
+    void snapFindsThePlaneFromAbove() {
+        assertEquals(Y, CourseRegion.snapToOpen(2, Y + 1, 2, oneOpenPlane(Y), 3));
+    }
+
+    /** An exact hit must not be moved: a tee already on the plane stays where it is. */
+    @Test
+    void snapLeavesAnExactStartAlone() {
+        assertEquals(Y, CourseRegion.snapToOpen(2, Y, 2, oneOpenPlane(Y), 3));
+    }
+
+    /** Snapping is a nudge, not a search of the whole column: solid rock stays unplayable. */
+    @Test
+    void snapGivesUpOnAColumnThatIsNotPlayable() {
+        assertEquals(CourseRegion.NO_START,
+                CourseRegion.snapToOpen(2, Y + 20, 2, oneOpenPlane(Y), 3));
+        assertEquals(CourseRegion.NO_START,
+                CourseRegion.snapToOpen(99, Y, 99, oneOpenPlane(Y), 3));
+    }
+
+    /** With the height resolved, the same course that traced nothing now traces in full. */
+    @Test
+    void snappingRescuesATraceThatWouldHaveFailed() {
+        CourseRegion.OpenTest open = oneOpenPlane(Y);
+        int start = CourseRegion.snapToOpen(2, Y - 1, 2, open, 3);
+        CourseRegion.Result result = CourseRegion.fill(2, start, 2, open,
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 0);
+
+        assertEquals(25, result.size(), "the whole 5x5 green");
+        assertTrue(result.isUsable());
+    }
+
     /** The headline case: an L-shaped hole whose box is far larger than its fairway. */
     @Test
     void tracesAnLShapedCourse() {

@@ -135,6 +135,11 @@ bounds:
   # one hole, so the trace steps down with it. Only downward: a ball rolls off a ledge, never up
   # one, and a trace that climbed would escape over the hole's own walls. 0 keeps it on one layer.
   max-drop: 8
+  # How far above and below the stored tee to look for the ball's own plane before tracing. /settee
+  # records your feet, so standing on a slab, stair or carpet stores a tee half a block high, and a
+  # tee set while stood on the boundary wall is a block high; without this the trace would start in
+  # solid rock or thin air and return nothing at all, whatever your boundary material is.
+  start-search: 3
 
   # Fallback only, for a hole with no tee set yet: two of these at opposite corners give a box.
   marker-material: AMETHYST_BLOCK

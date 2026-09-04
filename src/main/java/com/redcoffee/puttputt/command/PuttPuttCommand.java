@@ -413,7 +413,11 @@ public final class PuttPuttCommand {
      * Marker blocks and a pos1/pos2 selection remain as fallbacks.
      */
     private void applyBounds(Player player, Hole hole) {
-        if (hole.tee() != null && fillFromTee(player, hole)) {
+        if (hole.tee() != null) {
+            // A hole with a tee is meant to be traced. If that fails, say so and stop rather than
+            // quietly substituting a rectangle: a wrong box that looks like success is how a broken
+            // boundary goes unnoticed until someone plays the hole.
+            fillFromTee(player, hole);
             return;
         }
         Material marker = Material.matchMaterial(plugin.config().boundsMarker());
@@ -459,8 +463,17 @@ public final class PuttPuttCommand {
         CourseRegion.OpenTest open = WorldRegionScanner.openTest(
                 world, plugin.config().surfaces(), hole.materialOverrides(), boundary);
 
+        // The stored tee is not reliably on the ball's plane, so resolve the height rather than
+        // trusting it: one block out in either direction would otherwise return nothing at all.
+        int startY = CourseRegion.snapToOpen(tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(),
+                open, plugin.config().boundsStartSearch());
+        if (startY == CourseRegion.NO_START) {
+            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            return false;
+        }
+
         CourseRegion.Result region = CourseRegion.fill(
-                tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(), open,
+                tee.blockX(), startY, tee.blockZ(), open,
                 plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
                 plugin.config().boundsMaxDrop());
 
@@ -672,11 +685,16 @@ public final class PuttPuttCommand {
         }
 
         Vec3 tee = hole.tee();
-        int startY = (int) Math.floor(tee.y());
+        CourseRegion.OpenTest open = WorldRegionScanner.openTest(world, plugin.config().surfaces(),
+                hole.materialOverrides(), plugin.config().boundaryMaterialSet());
+        int startY = CourseRegion.snapToOpen(tee.blockX(), (int) Math.floor(tee.y()), tee.blockZ(),
+                open, plugin.config().boundsStartSearch());
+        if (startY == CourseRegion.NO_START) {
+            plugin.messages().send(player, "admin.bounds-tee-blocked");
+            return 0;
+        }
         CourseRegion.Result region = CourseRegion.fill(
-                tee.blockX(), startY, tee.blockZ(),
-                WorldRegionScanner.openTest(world, plugin.config().surfaces(),
-                        hole.materialOverrides(), plugin.config().boundaryMaterialSet()),
+                tee.blockX(), startY, tee.blockZ(), open,
                 plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
                 plugin.config().boundsMaxDrop());
 

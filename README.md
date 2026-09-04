@@ -271,6 +271,12 @@ anything solid at ball height, and at any cell with no floor beneath it. The res
 fairway's real shape: an L, a spiral, a horseshoe. Only the enclosing box is stored as the read
 window, but the traced cell set is what proves the hole is sealed.
 
+The trace starts from the tee, but does not trust its exact height. `/ppa settee` records your feet,
+so standing on a slab, a stair or a carpet stores a tee half a block high, and a tee set while stood
+on your own boundary wall is a block high. Either would put the trace in solid rock or in thin air,
+where it finds nothing at all — which looks exactly like the boundary material being ignored. The
+height is resolved within `bounds.start-search` blocks (3) of the stored tee instead.
+
 The trace follows drops. A fairway that falls over a ledge into a lower green is still one hole, so
 the fill steps down with it, up to `bounds.max-drop` blocks per step (8 by default; set it to 0 to
 keep the trace on a single layer). Only downward — a ball rolls off a ledge but never up one, and a

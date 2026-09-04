@@ -35,6 +35,7 @@ public final class PluginConfig {
     private java.util.List<String> boundaryMaterials = java.util.List.of("SMOOTH_STONE_SLAB");
     private int boundsMaxCells = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS;
     private int boundsMaxDrop = com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP;
+    private int boundsStartSearch = 3;
     private int boundsScanRadius = 64;
     private int boundsHeightPadding = 4;
     private int courseAutosaveSeconds = 60;
@@ -66,6 +67,7 @@ public final class PluginConfig {
                 com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_CELLS));
         boundsMaxDrop = Math.max(0, config.getInt("bounds.max-drop",
                 com.redcoffee.puttputt.course.CourseRegion.DEFAULT_MAX_DROP));
+        boundsStartSearch = Math.max(0, config.getInt("bounds.start-search", 3));
         boundsScanRadius = Math.max(1, config.getInt("bounds.scan-radius", 64));
         boundsHeightPadding = Math.max(0, config.getInt("bounds.height-padding", 4));
         courseAutosaveSeconds = Math.max(1, config.getInt("courses.autosave-seconds", 60));
@@ -305,6 +307,11 @@ public final class PluginConfig {
     /** Materials that bound a hole, whatever shape it is drawn in. */
     public java.util.List<String> boundaryMaterials() {
         return boundaryMaterials;
+    }
+
+    /** How far above and below the stored tee the trace looks for the ball's own plane. */
+    public int boundsStartSearch() {
+        return boundsStartSearch;
     }
 
     /** How far the trace will follow a drop downward before treating it as the edge of the hole. */
