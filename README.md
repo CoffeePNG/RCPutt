@@ -67,6 +67,12 @@ that order** — RCUI compiles against `rcplatform-api`, so RCPlatform has to co
 at Forgejo instead of the GitHub mirrors with `RCPLATFORM_URL` / `RCUI_URL` / `RCPARTIES_URL`, or
 on Windows the `-RcPlatformUrl` / `-RcUiUrl` / `-RcPartiesUrl` parameters.
 
+Each build is checked: if a dependency compiles but installs nothing, the script stops and names the
+artifact, rather than letting the next dependency fail on a missing jar several confusing steps
+later. It also clears Maven's cached resolution failures first — a `mvn package` run *before* the
+dependencies were installed records "not found" for them, and that cached miss can survive the
+install that fixes it, leaving builds failing on an artifact that is now sitting in your `.m2`.
+
 An existing clone is built as it stands and never pulled — silently updating your checkout would be
 worse than building what you have — but the script prints the branch, commit and whether it is
 dirty, so a stale artifact is obvious here rather than three confusing steps later.
