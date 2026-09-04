@@ -33,6 +33,19 @@ public final class CourseRegion {
     }
 
     /**
+     * Whether the ball's own layer is unobstructed here, ignoring whether there is a floor.
+     *
+     * <p>This is what separates a ledge from a wall. Both are "not open": a ledge because nothing
+     * is underneath, a wall because something is in the way. Only the first is a drop the ball
+     * would follow, and without the distinction a fill that follows drops will happily descend past
+     * a one-block-high separator and carry on underneath it.
+     */
+    @FunctionalInterface
+    public interface ClearTest {
+        boolean isClear(int x, int y, int z);
+    }
+
+    /**
      * @param cells    every reachable cell, in discovery order
      * @param bounds   smallest box containing them, or null if the start cell was not open
      * @param exhausted true when the fill hit its cell limit, which usually means a leak in the wall
@@ -71,6 +84,13 @@ public final class CourseRegion {
      */
     public static Result fill(int startX, int startY, int startZ, OpenTest open,
                               int maxCells, int heightPadding, int maxDrop) {
+        // No obstruction test supplied: every level counts as clear, so a drop is followed purely
+        // on the absence of a floor. Callers reading a real world should pass one.
+        return fill(startX, startY, startZ, open, (x, y, z) -> true, maxCells, heightPadding, maxDrop);
+    }
+
+    public static Result fill(int startX, int startY, int startZ, OpenTest open, ClearTest clear,
+                              int maxCells, int heightPadding, int maxDrop) {
         Set<String> seen = new LinkedHashSet<>();
         Set<long[]> cells = new LinkedHashSet<>();
         if (!open.isOpen(startX, startY, startZ)) {
@@ -106,7 +126,7 @@ public final class CourseRegion {
                 if (seen.contains(key)) {
                     continue;
                 }
-                int landing = landingHeight(open, nx, y, nz, drop);
+                int landing = landingHeight(open, clear, nx, y, nz, drop);
                 if (landing == NO_LANDING) {
                     continue;
                 }
@@ -159,11 +179,17 @@ public final class CourseRegion {
      * The height at which a ball entering this column would come to rest, or {@link #NO_LANDING} if
      * it cannot enter at all.
      *
-     * <p>A wall is a wall at every height, so the probe stops at the first blocked cell rather than
-     * hunting past it: only an open column with nothing underneath it counts as a drop.
+     * <p>The descent stops at the first level that is obstructed, not merely the first that is
+     * unusable. A separator only one block high would otherwise be walked under: the cell beside it
+     * is blocked, the cell below is open water, and the fill would surface on the far side as if
+     * the separator were not there.
      */
-    private static int landingHeight(OpenTest open, int x, int fromY, int z, int maxDrop) {
+    private static int landingHeight(OpenTest open, ClearTest clear, int x, int fromY, int z,
+                                     int maxDrop) {
         for (int y = fromY; y >= fromY - maxDrop; y--) {
+            if (!clear.isClear(x, y, z)) {
+                return NO_LANDING;   // something is in the way; this is a wall, not a drop
+            }
             if (open.isOpen(x, y, z)) {
                 return y;
             }

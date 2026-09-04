@@ -1,5 +1,5 @@
 # Bumped by the plugin when it migrates your file; do not edit by hand.
-config-version: 4
+config-version: 5
 
 # RCPuttPutt - RC-SPEC-PUTTPUTT-001
 # Everything a course designer needs to tune lives here. Surfaces are a registry, so new hazards,
@@ -76,6 +76,14 @@ material_map:
   SAND: sand
   BLUE_ICE: ice
   SMOOTH_STONE: wall
+  # INVISIBLE SEPARATORS. Not every edge of a course wants a wall you can see: a bank that falls
+  # away into water reads as perfectly good fairway, so the trace spills over it and the ball rolls
+  # off. Both of these mark an edge without building one.
+  #   BARRIER - invisible, and solid: players cannot walk through it either. Good along a drop.
+  #   LIGHT   - invisible and walk-through, so builders and players pass freely while the ball
+  #             still bounces and the trace still stops. Good where a wall would be in the way.
+  BARRIER: wall
+  LIGHT: wall
   WATER: water
   LIGHT_BLUE_CONCRETE: booster_north
   ORANGE_CONCRETE: booster_east
@@ -130,6 +138,7 @@ bounds:
   # unfenced drop bounds a hole just as a wall does.
   boundary-materials:
     - SMOOTH_STONE_SLAB
+    - BARRIER
   max-cells: 40000       # safety limit; hitting it means a gap in the boundary, not a big hole
   # How far the trace follows a drop. A fairway that falls over a ledge into a lower green is still
   # one hole, so the trace steps down with it. Only downward: a ball rolls off a ledge, never up

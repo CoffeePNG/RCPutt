@@ -462,6 +462,8 @@ public final class PuttPuttCommand {
         var boundary = plugin.config().boundaryMaterialSet();
         CourseRegion.OpenTest open = WorldRegionScanner.openTest(
                 world, plugin.config().surfaces(), hole.materialOverrides(), boundary);
+        CourseRegion.ClearTest clear = WorldRegionScanner.clearTest(
+                world, plugin.config().surfaces(), hole.materialOverrides(), boundary);
 
         // The stored tee is not reliably on the ball's plane, so resolve the height rather than
         // trusting it: one block out in either direction would otherwise return nothing at all.
@@ -482,7 +484,7 @@ public final class PuttPuttCommand {
         }
 
         CourseRegion.Result region = CourseRegion.fill(
-                tee.blockX(), startY, tee.blockZ(), open,
+                tee.blockX(), startY, tee.blockZ(), open, clear,
                 plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
                 plugin.config().boundsMaxDrop());
 
@@ -700,6 +702,8 @@ public final class PuttPuttCommand {
         Vec3 tee = hole.tee();
         CourseRegion.OpenTest open = WorldRegionScanner.openTest(world, plugin.config().surfaces(),
                 hole.materialOverrides(), plugin.config().boundaryMaterialSet());
+        CourseRegion.ClearTest clear = WorldRegionScanner.clearTest(world, plugin.config().surfaces(),
+                hole.materialOverrides(), plugin.config().boundaryMaterialSet());
         int teeY = (int) Math.floor(tee.y());
         int search = plugin.config().boundsStartSearch();
         int startY = CourseRegion.snapToOpen(tee.blockX(), teeY, tee.blockZ(), open, search);
@@ -715,14 +719,9 @@ public final class PuttPuttCommand {
             return 0;
         }
         CourseRegion.Result region = CourseRegion.fill(
-                tee.blockX(), startY, tee.blockZ(), open,
+                tee.blockX(), startY, tee.blockZ(), open, clear,
                 plugin.config().boundsMaxCells(), plugin.config().boundsHeightPadding(),
                 plugin.config().boundsMaxDrop());
-
-        if (region.bounds() == null) {
-            plugin.messages().send(player, "admin.bounds-tee-blocked");
-            return 0;
-        }
 
         BukkitTask previous = fillPreviews.remove(player.getUniqueId());
         if (previous != null) {

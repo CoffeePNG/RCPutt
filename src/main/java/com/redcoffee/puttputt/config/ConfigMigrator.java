@@ -26,7 +26,7 @@ import org.bukkit.plugin.Plugin;
 public final class ConfigMigrator {
 
     /** Bump when a release adds keys or changes what an existing key means. */
-    public static final int CURRENT_VERSION = 4;
+    public static final int CURRENT_VERSION = 5;
 
     private static final String VERSION_KEY = "config-version";
 
@@ -86,6 +86,10 @@ public final class ConfigMigrator {
         // v3 -> v4: bounds.max-drop arrived, so a traced hole follows a fairway over a ledge
         // instead of stopping at it. The packaged-defaults merge above adds the key; this step
         // exists so servers already on v3 run that merge at all.
+
+        // v4 -> v5: BARRIER and LIGHT map to the wall surface, so an edge can be marked without
+        // building a visible wall. The packaged-defaults merge above adds them; this step exists so
+        // servers already on v4 run that merge at all.
 
         config.set(VERSION_KEY, CURRENT_VERSION);
         plugin.saveConfig();

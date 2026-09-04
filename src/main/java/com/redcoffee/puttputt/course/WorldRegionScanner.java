@@ -55,6 +55,26 @@ public final class WorldRegionScanner {
         return null;
     }
 
+    /**
+     * Whether the ball's layer is unobstructed, ignoring the floor.
+     *
+     * <p>Deliberately the same three obstruction rules {@code openTest} applies at ball height, so
+     * a block that stops the fill on the flat also stops it from descending past.
+     */
+    public static CourseRegion.ClearTest clearTest(World world, SurfaceRegistry registry,
+                                                   Map<String, String> overrides,
+                                                   Set<Material> boundaryMaterials) {
+        return (x, ballY, z) -> {
+            if (!world.isChunkLoaded(x >> 4, z >> 4)) {
+                return false;
+            }
+            Material atBall = world.getBlockAt(x, ballY, z).getType();
+            return !boundaryMaterials.contains(atBall)
+                    && !registry.forMaterial(atBall.name(), overrides).isWall()
+                    && !atBall.isSolid();
+        };
+    }
+
     public static CourseRegion.OpenTest openTest(World world, SurfaceRegistry registry,
                                                  Map<String, String> overrides,
                                                  Set<Material> boundaryMaterials) {

@@ -188,6 +188,49 @@ class CourseRegionTest {
         assertTrue(result.isUsable());
     }
 
+    /**
+     * A bank that falls away into water, with a one-block separator on the lip.
+     *
+     * <p>The lower level is water: clear overhead and floored, so it is perfectly "open" and the
+     * fill would spread across it forever. The separator has to stop that - including stopping the
+     * fill from stepping down beside it and surfacing underneath.
+     */
+    @Test
+    void aOneBlockSeparatorIsNotTunnelledUnder() {
+        int fairwayY = Y;
+        int waterY = Y - 1;
+        // Fairway x=0..4 at Y; separator at x=5; water from x=6 out to x=20, one level down.
+        CourseRegion.OpenTest open = (x, y, z) -> {
+            if (z != 0 || x < 0 || x > 20) return false;
+            if (x <= 4) return y == fairwayY;
+            // The separator occupies only the ball's layer. Below it the water continues, which is
+            // exactly what makes tunnelling possible - and what the real bank looks like.
+            return y == waterY;
+        };
+        CourseRegion.ClearTest clear = (x, y, z) -> !(z == 0 && x == 5 && y == fairwayY);
+
+        CourseRegion.Result leaky = CourseRegion.fill(0, fairwayY, 0, open,
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 8);
+        CourseRegion.Result held = CourseRegion.fill(0, fairwayY, 0, open, clear,
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 8);
+
+        assertTrue(leaky.size() > 5, "without an obstruction test the fill goes under the separator");
+        assertEquals(5, held.size(), "the separator holds: only the fairway is traced");
+    }
+
+    /** A genuine ledge must still be followed - the fix must not disable drops. */
+    @Test
+    void aClearLedgeIsStillFollowedDown() {
+        CourseRegion.OpenTest open = (x, y, z) ->
+                z == 0 && x >= 0 && x <= 5 && (x <= 2 ? y == Y : y == Y - 2);
+        CourseRegion.ClearTest clear = (x, y, z) -> true;   // nothing in the way anywhere
+
+        CourseRegion.Result result = CourseRegion.fill(0, Y, 0, open, clear,
+                CourseRegion.DEFAULT_MAX_CELLS, 4, 8);
+
+        assertEquals(6, result.size(), "both the upper shelf and the lower one");
+    }
+
     /** The headline case: an L-shaped hole whose box is far larger than its fairway. */
     @Test
     void tracesAnLShapedCourse() {
